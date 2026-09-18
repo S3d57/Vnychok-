@@ -460,7 +460,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) {}
     }
 
-    // ---------- ГЛАВНЫЙ ЭКРАН ----------
     void showMain() {
         applyTheme(P.getInt("theme", 0));
         frame.setBackgroundColor(Color.parseColor(BG));
@@ -721,7 +720,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         say("Приложение не найдено.");
     }
 
-    // ---------- КАЛЕНДАРЬ ВЫБОРА ДАТЫ ----------
     void showCalendarPick() {
         if (calCur == null) calCur = Calendar.getInstance();
         renderCalendar();
@@ -787,7 +785,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         setScreen(c, false);
     }
 
-    // ---------- НАСТРОЙКИ ----------
     void showSettings() {
         LinearLayout c = col();
         c.addView(tv("⚙ НАСТРОЙКИ ОБОЛОЧКИ", 24, DARK, true));
@@ -861,7 +858,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void showAbout() {
         LinearLayout c = col();
         c.addView(tv("ВНУЧОК", 34, ACC, true));
-        c.addView(tv("Версия: 0.6", 20, DARK, true));
+        c.addView(tv("Версия: 0.7", 20, DARK, true));
         c.addView(tv("Оболочка Android для пенсионеров", 16, MUT, true));
         c.addView(tv("Все данные хранятся только на телефоне", 14, MUT, true));
         setScreen(c, false);
@@ -880,7 +877,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return r;
     }
 
-    // ---------- КОМАНДЫ ----------
     void handleCommand(String raw) {
         String t = raw.toLowerCase().replace('ё', 'е');
         String[] fc = findContact(t);
@@ -985,7 +981,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return null;
     }
 
-    // ---------- КОНТАКТЫ ----------
     void showContacts(boolean callMode) {
         LinearLayout c = col();
         c.addView(tv(callMode ? "КОМУ ЗВОНИМ?" : "КОМУ ПИШЕМ?", 26, DARK, true));
@@ -1120,7 +1115,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         say("Нет разрешения на звонки. Нажмите кнопку вызова или разрешите звонки в настройках.");
     }
 
-    // ---------- НАБОР + ИСТОРИЯ ----------
     void showDial() {
         LinearLayout c = col();
         LinearLayout tab = row();
@@ -1204,7 +1198,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return num;
     }
 
-    // ---------- СМС ----------
     void showSmsList() {
         LinearLayout c = col();
         c.addView(tv("ВХОДЯЩИЕ СООБЩЕНИЯ", 26, DARK, true));
@@ -1298,7 +1291,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         try { SmsManager.getDefault().sendTextMessage(num, null, text, null, null); } catch (Exception e) { say("СМС не ушло."); }
     }
 
-    // ---------- НАПОМИНАНИЯ ----------
     List<String[]> rems() {
         List<String[]> out = new ArrayList<>();
         String raw = P.getString("rems", "");
@@ -1405,7 +1397,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         setScreen(c, false);
     }
 
-    // ---------- БУДИЛЬНИК ----------
     long nextAlarm(int h, int m, int mask) {
         Calendar now = Calendar.getInstance();
         for (int d = 0; d < 8; d++) {
@@ -1460,19 +1451,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         c.addView(rw);
         c.addView(tv("Дни недели:", 16, DARK, true));
         final LinearLayout days = row();
-        final Button[] dbs = new Button[7];
         for (int i = 0; i < 7; i++) {
             final int bit = i;
             boolean on = (alarmMask & (1 << bit)) != 0;
-            dbs[i] = big(DN[i], on ? "#3FAE4C" : TILE, on ? "#FFFFFF" : TFG, v -> {
+            Button db = big(DN[i], on ? "#3FAE4C" : TILE, on ? "#FFFFFF" : TFG, v -> {
                 alarmMask ^= (1 << bit);
                 boolean nowOn = (alarmMask & (1 << bit)) != 0;
                 v.setBackground(gd(nowOn ? "#3FAE4C" : TILE));
                 ((Button) v).setTextColor(Color.parseColor(nowOn ? "#FFFFFF" : TFG));
             });
-            dbs[i].setTextSize(13 * FS * SC);
-            dbs[i].setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            days.addView(dbs[i]);
+            db.setTextSize(13 * FS * SC);
+            db.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            days.addView(db);
         }
         c.addView(days);
         c.addView(tv("(ничего не нажато = каждый день)", 13, MUT, false));
@@ -1587,7 +1577,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         say("Внимание! " + text);
     }
 
-    // ---------- SOS ----------
     void startSos() {
         LinearLayout c = col();
         c.addView(tv("ВЫЗЫВАЕМ ПОМОЩЬ!", 28, "#C0392B", true));
@@ -1644,7 +1633,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) { return "Спутники не ловятся, точное место неизвестно."; }
     }
 
-    // ---------- ПРИЛОЖЕНИЯ ----------
     List<Object[]> installedApps() {
         List<Object[]> out = new ArrayList<>();
         String myPkg = getPackageName();
@@ -1667,7 +1655,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) { say("Не удалось открыть."); }
     }
 
-    // ---------- БАТАРЕЯ ----------class BatteryReceiver extends BroadcastReceiver {
+    class BatteryReceiver extends BroadcastReceiver {
         boolean wasCharging = false, wasFull = false;
         @Override public void onReceive(Context c, Intent i) {
             int level = i.getIntExtra("level", -1), scale = i.getIntExtra("scale", -1);
@@ -1691,7 +1679,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             if (pct <= 5) { showBattOverlay(); return; }
             if (pct <= 15 && !battWarned) { battWarned = true; say("Батарея пятнадцать процентов. Поставьте телефон на зарядку, пожалуйста."); }
         }
-}
+    }
+
     void showBattOverlay() {
         if (battOverlay != null) return;
         battOverlay = new LinearLayout(this);
@@ -1708,7 +1697,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         say("Внимание! Батарея почти села! Поставьте телефон на зарядку!");
     }
 
-    // ---------- ПРОЧЕЕ ----------
     void toggleTorch() {
         try {
             CameraManager cm = (CameraManager) getSystemService(CAMERA_SERVICE);
@@ -1761,4 +1749,4 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         if (tts != null) tts.shutdown();
         super.onDestroy();
     }
-            }
+    }

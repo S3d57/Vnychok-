@@ -57,7 +57,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.NumberPicker;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.util.ArrayList;
@@ -69,6 +68,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
+
+    static class THolder { String bg; ObjectAnimator oa; }
 
     static class Icon extends Drawable {
         String k; Paint f, s; int level = -1, bars = -1;
@@ -120,7 +121,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     Icon ic(String k, String col, int size) { Icon i = new Icon(k, Color.parseColor(col)); i.setBounds(0, 0, size, size); return i; }
 
     Handler H = new Handler(Looper.getMainLooper());
-    FrameLayout frame; ScrollView scroll; LinearLayout rootLin; Button bar;
+    FrameLayout frame; ScrollView scroll; LinearLayout rootLin, headerSlot; Button bar;
     TextView caption, userSay, timeView, dateView, sbPopup, sbBatt, sbSig, sbOper, sbNet;
     Button micBtn, msgTile, callTile;
     TextToSpeech tts; boolean ttsReady;
@@ -163,6 +164,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         frame.setBackgroundColor(Color.parseColor(BG));
         rootLin = new LinearLayout(this);
         rootLin.setOrientation(LinearLayout.VERTICAL);
+        headerSlot = new LinearLayout(this);
+        headerSlot.setOrientation(LinearLayout.VERTICAL);
+        headerSlot.setVisibility(View.GONE);
+        rootLin.addView(headerSlot, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         scroll = new ScrollView(this);
         scroll.setClipChildren(false);
         scroll.setClipToPadding(false);
@@ -282,16 +287,25 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return t;
     }
 
+    THolder holder(View v) {
+        Object o = v.getTag();
+        if (o instanceof THolder) return (THolder) o;
+        THolder th = new THolder();
+        v.setTag(th);
+        return th;
+    }
+
     void blink(View v, boolean on) {
         if (v == null) return;
+        THolder th = holder(v);
         if (on) {
             v.animate().cancel();
             ObjectAnimator oa = ObjectAnimator.ofFloat(v, "alpha", 1f, 0.3f);
             oa.setDuration(600); oa.setRepeatMode(ValueAnimator.REVERSE); oa.setRepeatCount(ValueAnimator.INFINITE);
-            oa.start(); v.setTag(oa);
+            oa.start(); th.oa = oa;
         } else {
-            Object o = v.getTag();
-            if (o instanceof ObjectAnimator) ((ObjectAnimator) o).cancel();
+            if (th.oa != null) th.oa.cancel();
+            th.oa = null;
             v.animate().alpha(1f);
         }
     }
@@ -306,8 +320,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         try { Vibrator vb = (Vibrator) getSystemService(VIBRATOR_SERVICE); vb.vibrate(VibrationEffect.createOneShot(35, 140)); } catch (Exception e) {}
         v.animate().scaleX(0.95f).scaleY(0.95f).setDuration(250)
                 .withEndAction(() -> v.animate().scaleX(1f).scaleY(1f).setDuration(250));
-        Object tg2 = v.getTag();
-        String bg = (tg2 instanceof String) ? (String) tg2 : null;
+        THolder th = holder(v);
+        String bg = th.bg;
         if (bg != null) {
             GradientDrawable base = gd(bg);
             final GradientDrawable ring = new GradientDrawable();
@@ -326,8 +340,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             va.addUpdateListener(a -> ring.setAlpha((Integer) a.getAnimatedValue()));
             va.start();
             H.postDelayed(() -> {
-                Object t2 = v.getTag();
-                if (t2 instanceof String) v.setBackground(gd((String) t2));
+                v.setBackground(gd(th.bg));
                 v.setElevation(dp(5));
             }, 500);
         }
@@ -338,7 +351,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         b.setText(text); b.setTextSize(20 * FS * SC); b.setTextColor(Color.parseColor(fg));
         b.setAllCaps(false); b.getPaint().setFakeBoldText(true);
         b.setBackground(gd(bg));
-        b.setTag(bg);
+        THolder th = new THolder(); th.bg = bg; b.setTag(th);
         b.setElevation(dp(5));
         b.setPadding(dp(10), dp(14), dp(10), dp(16));
         b.setOnClickListener(v -> { pressFx(v); l.onClick(v); });
@@ -358,8 +371,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         b.setTextSize(14 * FS * SC); b.setTextColor(Color.parseColor(fg));
         b.setAllCaps(false); b.getPaint().setFakeBoldText(true);
         b.setBackground(gd(bg));
-        b.setTag(bg);
+        THolder th = new THolder(); th.bg = bg; b.setTag(th);
         b.setElevation(dp(5));
+        b.setMinHeight(dp(100));
         b.setCompoundDrawables(null, ic(kind, fg, dp(40)), null, null);
         b.setCompoundDrawablePadding(dp(4));
         b.setPadding(dp(4), dp(8), dp(4), dp(10));
@@ -386,13 +400,19 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return l;
     }
 
-    void setScreen(LinearLayout c, boolean isMain) {
+    void setScreen(LinearLayout c, boolean isMain) { setScreenHeader(c, isMain, null); }
+
+    void setScreenHeader(LinearLayout c, boolean isMain, View header) {
         H.post(() -> {
+            headerSlot.removeAllViews();
+            if (header != null) { headerSlot.setVisibility(View.VISIBLE); headerSlot.addView(header); }
+            else headerSlot.setVisibility(View.GONE);
             scroll.removeAllViews();
             scroll.addView(c);
             scroll.scrollTo(0, 0);
             c.setAlpha(0f);
-            c.animate().alpha(1f).setDuration(500);
+            c.setTranslationY(dp(10));
+            c.animate().alpha(1f).translationY(0f).setDuration(500);
             bar.setVisibility(isMain ? View.GONE : View.VISIBLE);
             bar.setBackground(gd(DARK));
             bar.setTextColor(Color.parseColor(BG));
@@ -555,7 +575,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         og.setColor(Color.parseColor(ACC)); og.setShape(GradientDrawable.OVAL);
         og.setStroke(dp(7), Color.parseColor(CARD));
         micBtn.setBackground(og);
-        micBtn.setTag(null);
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(dp(170), dp(170));
         mp.topMargin = dp(6); mp.bottomMargin = dp(4);
         micBtn.setLayoutParams(mp);
@@ -577,7 +596,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         capBox.setLayoutParams(cp);
         c.addView(capBox);
 
-        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, dp(112), 1f);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         hp.setMargins(dp(3), dp(2), dp(3), dp(2));
         callTile = tileBtn("phone", "ПОЗВОНИТЬ", tileColor(0), TFG, v -> showContacts(true));
         msgTile = tileBtn("mail", "СООБЩЕНИЯ", tileColor(1), TFG, v -> { blink(msgTile, false); showSmsList(); });
@@ -603,13 +622,21 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         r2.addView(t6); r2.addView(t7); r2.addView(t8);
         c.addView(r2);
 
+        LinearLayout.LayoutParams hpSmall = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        hpSmall.setMargins(dp(3), dp(2), dp(3), dp(2));
         LinearLayout r3 = row();
         Button ex = tileBtn("wrench", "ПРОЧЕЕ", tileColor(0), TFG, v -> showExtra());
-        ex.setLayoutParams(hp);
+        ex.setMinHeight(dp(56));
+        ex.setTextSize(12 * FS * SC);
+        ex.setCompoundDrawables(null, ic("wrench", TFG, dp(24)), null, null);
+        ex.setLayoutParams(hpSmall);
         r3.addView(ex);
         if (P.getBoolean("showApps", true)) {
             Button ap = tileBtn("folder", "ДОП. ПРОГРАММЫ", tileColor(1), TFG, v -> showAppsScreen());
-            ap.setLayoutParams(hp);
+            ap.setMinHeight(dp(56));
+            ap.setTextSize(12 * FS * SC);
+            ap.setCompoundDrawables(null, ic("folder", TFG, dp(24)), null, null);
+            ap.setLayoutParams(hpSmall);
             r3.addView(ap);
         }
         c.addView(r3);
@@ -629,7 +656,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void showAppsScreen() {
         LinearLayout c = col();
         c.addView(tv("ДОПОЛНИТЕЛЬНЫЕ ПРОГРАММЫ", 24, DARK, true));
-        LinearLayout.LayoutParams hp2 = new LinearLayout.LayoutParams(0, dp(110), 1f);
+        LinearLayout.LayoutParams hp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         hp2.setMargins(dp(3), dp(3), dp(3), dp(3));
         List<Object[]> apps = installedApps();
         LinearLayout ar = null;
@@ -639,7 +666,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             Button ab = new Button(this);
             ab.setText((String) a[0]);
             ab.setTextSize(11 * FS * SC); ab.setTextColor(Color.parseColor(TFG));
-            ab.setBackground(gd(TILE)); ab.setTag(TILE); ab.setElevation(dp(4));
+            ab.setBackground(gd(TILE));
+            THolder th = new THolder(); th.bg = TILE; ab.setTag(th);
+            ab.setElevation(dp(4));
+            ab.setMinHeight(dp(100));
             Drawable icn = (Drawable) a[1];
             if (icn != null) { icn.setBounds(0, 0, dp(40), dp(40)); ab.setCompoundDrawables(null, icn, null, null); }
             ab.setOnClickListener(v -> { pressFx(v); openPackage((String) a[2]); });
@@ -929,7 +959,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void showAbout() {
         LinearLayout c = col();
         c.addView(tv("ВНУЧОК", 34, ACC, true));
-        c.addView(tv("Версия: 0.9", 20, DARK, true));
+        c.addView(tv("Версия: 1.0", 20, DARK, true));
         c.addView(tv("Оболочка Android для пенсионеров", 16, MUT, true));
         c.addView(tv("Все данные хранятся только на телефоне", 14, MUT, true));
         setScreen(c, false);
@@ -1078,8 +1108,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             rw.addView(db);
             c.addView(rw);
         }
-        c.addView(bigI("people", "НОВЫЙ НОМЕР", "#3FAE4C", "#FFFFFF", v -> editContact(-1, "", "")));
-        setScreen(c, false);
+        Button header = bigI("people", "НОВЫЙ НОМЕР", "#3FAE4C", "#FFFFFF", v -> editContact(-1, "", ""));
+        header.setTextSize(18 * FS * SC);
+        setScreenHeader(c, false, header);
     }
 
     void editContact(int idx, String preN, String preP) {
@@ -1530,31 +1561,41 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         setScreen(c, false);
     }
 
+    void addTimeRow(LinearLayout c, String label, final int[] val, int mod, int step) {
+        LinearLayout r = row();
+        r.setGravity(Gravity.CENTER);
+        TextView lt = tv(label, 18, DARK, true);
+        lt.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        r.addView(lt);
+        Button minus = big("−", TILE, TFG, v -> { val[0] = (val[0] - step + mod) % mod; ((TextView) r.getChildAt(2)).setText(String.format(Locale.getDefault(), "%02d", val[0])); });
+        minus.setTextSize(32 * FS * SC);
+        minus.setLayoutParams(new LinearLayout.LayoutParams(dp(90), ViewGroup.LayoutParams.WRAP_CONTENT));
+        final TextView disp = tv(String.format(Locale.getDefault(), "%02d", val[0]), 40, DARK, true);
+        disp.setGravity(Gravity.CENTER);
+        disp.setMinWidth(dp(120));
+        Button plus = big("+", TILE, TFG, v -> { val[0] = (val[0] + step) % mod; ((TextView) r.getChildAt(2)).setText(String.format(Locale.getDefault(), "%02d", val[0])); });
+        plus.setTextSize(32 * FS * SC);
+        plus.setLayoutParams(new LinearLayout.LayoutParams(dp(90), ViewGroup.LayoutParams.WRAP_CONTENT));
+        r.addView(minus); r.addView(disp); r.addView(plus);
+        c.addView(r);
+    }
+
     void showRemEditor() {
         LinearLayout c = col();
         c.addView(tv("НОВОЕ НАПОМИНАНИЕ", 28, DARK, true));
         final EditText en = new EditText(this); en.setTextSize(22 * FS * SC); en.setHint("Название (например: таблетки)");
         c.addView(en);
-        final NumberPicker nh = new NumberPicker(this); nh.setMinValue(0); nh.setMaxValue(23); nh.setValue(9);
-        final NumberPicker nm = new NumberPicker(this); nm.setMinValue(0); nm.setMaxValue(55); nm.setValue(0);
-        String[] mins = new String[60];
-        for (int i = 0; i < 60; i += 5) mins[i] = String.format("%02d", i);
-        for (int i = 0; i < 60; i++) if (mins[i] == null) mins[i] = "";
-        nm.setDisplayedValues(mins);
-        LinearLayout rw = row();
-        rw.setGravity(Gravity.CENTER);
-        nh.setLayoutParams(new LinearLayout.LayoutParams(dp(140), dp(200)));
-        nm.setLayoutParams(new LinearLayout.LayoutParams(dp(140), dp(200)));
-        rw.addView(nh); rw.addView(nm);
-        c.addView(rw);
-        bigPicker(nh); bigPicker(nm);
+        final int[] hv = {9};
+        final int[] mv = {0};
+        addTimeRow(c, "ЧАСЫ", hv, 24, 1);
+        addTimeRow(c, "МИНУТЫ", mv, 60, 5);
         c.addView(bigI("clock", "Дата: " + selDate.get(Calendar.DAY_OF_MONTH) + "." + (selDate.get(Calendar.MONTH) + 1) + "." + selDate.get(Calendar.YEAR), TILE, TFG, v -> showCalendarPick()));
         c.addView(big("💾 СОХРАНИТЬ", "#3FAE4C", "#FFFFFF", v -> {
             String name = en.getText().toString().trim();
             if (name.isEmpty()) name = "Напоминание";
             Calendar cc = (Calendar) selDate.clone();
-            cc.set(Calendar.HOUR_OF_DAY, nh.getValue());
-            cc.set(Calendar.MINUTE, nm.getValue() * 5);
+            cc.set(Calendar.HOUR_OF_DAY, hv[0]);
+            cc.set(Calendar.MINUTE, mv[0]);
             cc.set(Calendar.SECOND, 0);
             if (cc.before(Calendar.getInstance())) cc.add(Calendar.DAY_OF_YEAR, 1);
             addReminder(cc.getTimeInMillis(), name);
@@ -1563,15 +1604,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }));
         c.addView(big("ОТМЕНА", TILE, TFG, v -> showReminders()));
         setScreen(c, false);
-    }
-
-    void bigPicker(final NumberPicker p) {
-        p.post(() -> {
-            for (int i = 0; i < p.getChildCount(); i++) {
-                View ch = p.getChildAt(i);
-                if (ch instanceof TextView) ((TextView) ch).setTextSize(30 * FS * SC);
-            }
-        });
     }
 
     long nextAlarm(int h, int m, int mask) {
@@ -1614,19 +1646,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void showAlarms() {
         LinearLayout c = col();
         c.addView(tv("БУДИЛЬНИК", 30, DARK, true));
-        final NumberPicker nh = new NumberPicker(this); nh.setMinValue(0); nh.setMaxValue(23); nh.setValue(7);
-        final NumberPicker nm = new NumberPicker(this); nm.setMinValue(0); nm.setMaxValue(55); nm.setValue(0);
-        String[] mins = new String[60];
-        for (int i = 0; i < 60; i += 5) mins[i] = String.format("%02d", i);
-        for (int i = 0; i < 60; i++) if (mins[i] == null) mins[i] = "";
-        nm.setDisplayedValues(mins);
-        LinearLayout rw = row();
-        rw.setGravity(Gravity.CENTER);
-        nh.setLayoutParams(new LinearLayout.LayoutParams(dp(140), dp(200)));
-        nm.setLayoutParams(new LinearLayout.LayoutParams(dp(140), dp(200)));
-        rw.addView(nh); rw.addView(nm);
-        c.addView(rw);
-        bigPicker(nh); bigPicker(nm);
+        final int[] hv = {7};
+        final int[] mv = {0};
+        addTimeRow(c, "ЧАСЫ", hv, 24, 1);
+        addTimeRow(c, "МИНУТЫ", mv, 60, 5);
         c.addView(tv("Дни недели:", 18, DARK, true));
         final LinearLayout days = row();
         for (int i = 0; i < 7; i++) {
@@ -1637,7 +1660,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 boolean nowOn = (alarmMask & (1 << bit)) != 0;
                 String nb = nowOn ? "#3FAE4C" : TILE;
                 v.setBackground(gd(nb));
-                v.setTag(nb);
+                holder(v).bg = nb;
                 ((Button) v).setTextColor(Color.parseColor(nowOn ? "#FFFFFF" : TFG));
             });
             db.setTextSize(16 * FS * SC);
@@ -1649,9 +1672,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         c.addView(days);
         c.addView(tv("(ничего не нажато = каждый день)", 14, MUT, false));
         c.addView(bigI("alarm", "ПОСТАВИТЬ БУДИЛЬНИК", "#3FAE4C", "#FFFFFF", v -> {
-            int m = nm.getValue() * 5;
-            long ms = nextAlarm(nh.getValue(), m, alarmMask);
-            addAlarm(nh.getValue(), m, alarmMask, "Будильник! Пора вставать!");
+            long ms = nextAlarm(hv[0], mv[0], alarmMask);
+            addAlarm(hv[0], mv[0], alarmMask, "Будильник! Пора вставать!");
             say("Будильник поставлен. " + until(ms));
             showAlarms();
         }));
@@ -1907,4 +1929,4 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         if (tts != null) tts.shutdown();
         super.onDestroy();
     }
-                }
+            }

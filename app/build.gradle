@@ -18,5 +18,4 @@ android {
     }
 }
 dependencies {
-    implementation 'com.alphacephkni:vosk-android:0.3.45'
 }

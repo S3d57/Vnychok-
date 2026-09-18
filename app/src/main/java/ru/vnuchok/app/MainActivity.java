@@ -10,16 +10,15 @@ import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.camera2.CameraManager;
-import android.media.AudioFormat;
 import android.media.AudioManager;
-import android.media.AudioRecord;
-import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.telephony.SmsManager;
 import android.location.Location;
@@ -33,21 +32,13 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import com.alphacephkni.vosk.Model;
-import com.alphacephkni.vosk.Recognizer;
 import org.json.JSONObject;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import android.content.pm.ResolveInfo;
 import android.provider.MediaStore;
 
@@ -64,7 +55,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     FrameLayout frame; ScrollView scroll;
     TextView caption, timeView;
     TextToSpeech tts; boolean ttsReady;
-    Model model; Recognizer rec; AudioRecord audio; Thread recThread; volatile boolean listening;
+    SpeechRecognizer sr;
     boolean torchOn, battWarned;
     LinearLayout battOverlay, remOverlay, confirmOverlay;
     String lastSay = "";
@@ -86,7 +77,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         battRec = new BatteryReceiver();
         registerReceiver(battRec, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         showMain();
-        ensureModel();
         if (getIntent() != null && getIntent().hasExtra("reminder")) showReminder(getIntent().getStringExtra("reminder"));
     }
 
@@ -151,7 +141,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return String.format(Locale.getDefault(), "%02d:%02d", c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE));
     }
 
-    // ---------- ГЛАВНЫЙ ЭКРАН ----------
     void showMain() {
         LinearLayout c = col();
         timeView = tv(curTime(), 44, "#4A2C17", true);
@@ -206,68 +195,52 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         setScreen(c);
     }
 
-    // ---------- СЛУШАНИЕ (VOSK, БЕЗ ИНТЕРНЕТА) ----------
+    // ---------- СЛУХ (встроенный распознаватель телефона) ----------
     void showListen() {
         LinearLayout c = col();
         c.addView(tv("СЛУШАЮ…", 30, "#54300F", true));
         TextView partial = tv("…", 20, "#7A4A21", true);
         partial.setGravity(Gravity.CENTER);
         c.addView(partial);
-        c.addView(big("✅ ГОТОВО", "#D94F1E", "#FFFFFF", v -> {
-            String t = finishListening();
-            if (!t.isEmpty()) handleCommand(t); else { say("Не расслышал. Повторите, пожалуйста."); showMain(); }
-        }));
+        c.addView(big("✅ ГОТОВО", "#D94F1E", "#FFFFFF", v -> { try { if (sr != null) sr.stopListening(); } catch (Exception e) {} }));
         c.addView(big("ОТМЕНА", "#F9ECCA", "#7A4A21", v -> { stopListening(); showMain(); }));
         setScreen(c);
         startListening(partial);
     }
 
     void startListening(TextView pv) {
-        if (model == null) { say("Мои уши ещё не скачались. Нужен Wi-Fi один раз."); return; }
         stopListening();
-        try {
-            rec = new Recognizer(model, 16000f);
-            audio = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
-                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, 8192);
-            audio.startRecording();
-            listening = true;
-            recThread = new Thread(() -> {
-                short[] buf = new short[4096];
-                while (listening) {
-                    int n = audio.read(buf, 0, buf.length);
-                    if (n > 0 && rec != null) {
-                        if (rec.acceptWaveForm(buf, n)) {
-                            String r = rec.getResult();
-                            listening = false;
-                            H.post(() -> { stopListening(); String t = jsonText(r); if (!t.isEmpty()) handleCommand(t); else { say("Не расслышал. Повторите, пожалуйста."); showMain(); } });
-                            break;
-                        } else {
-                            String p = jsonField(rec.getPartialResult(), "partial");
-                            H.post(() -> pv.setText(p.isEmpty() ? "…" : p));
-                        }
-                    }
-                }
-            });
-            recThread.start();
-        } catch (Exception e) { say("Микрофон не открылся."); }
-    }
-
-    String finishListening() {
-        String t = "";
-        if (rec != null && listening) { listening = false; try { t = jsonText(rec.getFinalResult()); } catch (Exception e) {} }
-        stopListening();
-        return t;
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { say("Телефон не умеет слушать. Попросите родных обновить сервисы Google."); showMain(); return; }
+        sr = SpeechRecognizer.createSpeechRecognizer(this);
+        Intent it = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        it.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        it.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU");
+        it.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        sr.setRecognitionListener(new android.speech.RecognitionListener() {
+            public void onReadyForSpeech(Bundle p) {}
+            public void onBeginningOfSpeech() {}
+            public void onRmsChanged(float v) {}
+            public void onBufferReceived(byte[] b) {}
+            public void onEndOfSpeech() {}
+            public void onError(int e) { H.post(() -> { stopListening(); say("Не расслышал. Повторите, пожалуйста."); showMain(); }); }
+            public void onResults(Bundle r) {
+                ArrayList<String> a = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                String t = (a != null && !a.isEmpty()) ? a.get(0) : "";
+                H.post(() -> { stopListening(); if (!t.isEmpty()) handleCommand(t); else { say("Не расслышал. Повторите, пожалуйста."); showMain(); } });
+            }
+            public void onPartialResults(Bundle r) {
+                ArrayList<String> a = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (a != null && !a.isEmpty()) H.post(() -> pv.setText(a.get(0)));
+            }
+            public void onEvent(int i, Bundle b) {}
+        });
+        try { sr.startListening(it); } catch (Exception e) { say("Микрофон не открылся."); showMain(); }
     }
 
     void stopListening() {
-        listening = false;
-        try { if (audio != null) { audio.stop(); audio.release(); } } catch (Exception e) {}
-        audio = null;
-        try { if (rec != null) rec.close(); } catch (Exception e) {}
+        try { if (sr != null) { sr.stopListening(); sr.cancel(); sr.destroy(); } } catch (Exception e) {}
+        sr = null;
     }
-
-    String jsonText(String j) { try { return new JSONObject(j).optString("text", ""); } catch (Exception e) { return ""; } }
-    String jsonField(String j, String f) { try { return new JSONObject(j).optString(f, ""); } catch (Exception e) { return ""; } }
 
     // ---------- КОМАНДЫ ----------
     void handleCommand(String raw) {
@@ -299,7 +272,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return -1;
     }
 
-    // ---------- ЗВОНКИ И СМС ----------
     void showContacts(boolean callMode) {
         LinearLayout c = col();
         c.addView(tv(callMode ? "КОМУ ЗВОНИМ?" : "КОМУ ПИШЕМ?", 26, "#54300F", true));
@@ -370,7 +342,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) { say("Не смог прочитать сообщения."); }
     }
 
-    // ---------- ФОНАРИК, ГРОМКОСТЬ, ПРИЛОЖЕНИЯ ----------
     void toggleTorch() {
         try {
             CameraManager cm = (CameraManager) getSystemService(CAMERA_SERVICE);
@@ -404,7 +375,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) { say("Не смог открыть."); }
     }
 
-    // ---------- ВРЕМЯ И НАПОМИНАНИЯ ----------
     void sayTime() {
         Calendar c = Calendar.getInstance();
         String[] days = {"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"};
@@ -466,7 +436,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         say("Внимание! " + text);
     }
 
-    // ---------- SOS ----------
     void startSos() {
         LinearLayout c = col();
         c.addView(tv("ВЫЗЫВАЕМ ПОМОЩЬ!", 28, "#C0392B", true));
@@ -495,8 +464,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         LinearLayout c = col();
         c.addView(tv("☎ ИДЁТ ЗВОНОК В 112…", 26, "#C0392B", true));
         c.addView(tv("СМС отправлено родным:", 18, "#54300F", true));
-        TextView box = tv(sms, 16, "#54300F", true);
-        c.addView(box);
+        c.addView(tv(sms, 16, "#54300F", true));
         c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
         setScreen(c);
         say("Вызываю сто двенадцать и отправляю сообщение родным!");
@@ -512,7 +480,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) { return "Спутники не ловятся, точное место неизвестно."; }
     }
 
-    // ---------- БАТАРЕЯ ----------
     class BatteryReceiver extends BroadcastReceiver {
         @Override public void onReceive(Context c, Intent i) {
             int level = i.getIntExtra("level", -1), scale = i.getIntExtra("scale", -1);
@@ -545,63 +512,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         say("Внимание! Батарея почти села! Поставьте телефон на зарядку!");
     }
 
-    // ---------- МОДЕЛЬ VOSK ----------
-    void ensureModel() {
-        new Thread(() -> {
-            try {
-                File dir = new File(getFilesDir(), "model-ru");
-                File ready = findModelDir(dir);
-                if (ready == null) {
-                    H.post(() -> say("Скачиваю уши для слуха, один раз, нужен вай-фай…"));
-                    File zip = new File(getCacheDir(), "model.zip");
-                    if (!zip.exists()) {
-                        HttpURLConnection cn = (HttpURLConnection) new URL("https://alphacephai.com/vosk/models/vosk-model-small-ru-0.22.zip").openConnection();
-                        InputStream in = cn.getInputStream();
-                        FileOutputStream out = new FileOutputStream(zip);
-                        byte[] b = new byte[65536];
-                        int r;
-                        while ((r = in.read(b)) > 0) out.write(b, 0, r);
-                        out.close(); in.close();
-                    }
-                    ZipInputStream zi = new ZipInputStream(new java.io.FileInputStream(zip));
-                    ZipEntry e;
-                    while ((e = zi.getNextEntry()) != null) {
-                        if (e.isDirectory()) continue;
-                        File f = new File(dir, e.getName());
-                        f.getParentFile().mkdirs();
-                        FileOutputStream fo = new FileOutputStream(f);
-                        byte[] bb = new byte[65536];
-                        int rr;
-                        while ((rr = zi.read(bb)) > 0) fo.write(bb, 0, rr);
-                        fo.close();
-                    }
-                    zi.close();
-                    zip.delete();
-                    ready = findModelDir(dir);
-                }
-                if (ready != null) {
-                    model = new Model(ready.getAbsolutePath());
-                    H.post(() -> say("Уши на месте! Я слышу вас без интернета."));
-                } else {
-                    H.post(() -> say("Не смог скачать уши. Попросите родных подключить вай-фай."));
-                }
-            } catch (Exception e) {
-                H.post(() -> say("Уши не скачались. Нужен вай-фай, потом попробуйте ещё раз."));
-            }
-        }).start();
-    }
-
-    File findModelDir(File dir) {
-        if (!dir.exists()) return null;
-        if (new File(dir, "conf").exists()) return dir;
-        File[] fs = dir.listFiles();
-        if (fs != null) for (File f : fs) if (f.isDirectory() && new File(f, "conf").exists()) return f;
-        return null;
-    }
-
     @Override public void onBackPressed() {
         if (confirmOverlay != null) { removeConfirm(); return; }
-        // оболочка: кнопка «назад» никуда не уводит
     }
 
     @Override protected void onDestroy() {

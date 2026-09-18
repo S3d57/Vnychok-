@@ -1202,7 +1202,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             final int bit = i;
             dbs[i] = big(DN[i], TILE, TFG, v -> {
                 alarmMask ^= (1 << bit);
-                v.setBackgroundColor(Color.parseColor((alarmMask & (1 << bit)) != 0 ? "#3FAE4C" : Color.parseColor(TILE)));
+                v.setBackgroundColor(Color.parseColor((alarmMask & (1 << bit)) != 0 ? "#3FAE4C" : TILE));
             });
             dbs[i].setTextSize(13 * FS);
             dbs[i].setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));

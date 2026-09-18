@@ -746,7 +746,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         LinearLayout c = col();
         c.addView(tv("⏰ БУДИЛЬНИК", 26, "#54300F", true));
         NumberPicker nh = new NumberPicker(this); nh.setMinValue(0); nh.setMaxValue(23); nh.setValue(7);
-        NumberPicker nm = new NumberPicker(this); nm.setMinValue(0); nm.setMaxValue(55); nm.setValue(0); nm.setWrapSelectorOrder(true);
+        NumberPicker nm = new NumberPicker(this); nm.setMinValue(0); nm.setMaxValue(55); nm.setValue(0); nm.setWrapSelectorWheel(true);
         LinearLayout rw = row();
         rw.setGravity(Gravity.CENTER);
         nh.setLayoutParams(new LinearLayout.LayoutParams(dp(110), dp(160)));

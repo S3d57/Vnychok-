@@ -1468,7 +1468,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 alarmMask ^= (1 << bit);
                 boolean nowOn = (alarmMask & (1 << bit)) != 0;
                 v.setBackground(gd(nowOn ? "#3FAE4C" : TILE));
-                v.setTextColor(Color.parseColor(nowOn ? "#FFFFFF" : TFG));
+                ((Button) v).setTextColor(Color.parseColor(nowOn ? "#FFFFFF" : TFG));
             });
             dbs[i].setTextSize(13 * FS * SC);
             dbs[i].setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -1667,26 +1667,31 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) { say("Не удалось открыть."); }
     }
 
-    // ---------- БАТАРЕЯ ----------
-    class BatteryReceiver extends BroadcastReceiver {
+    // ---------- БАТАРЕЯ ----------class BatteryReceiver extends BroadcastReceiver {
+        boolean wasCharging = false, wasFull = false;
         @Override public void onReceive(Context c, Intent i) {
             int level = i.getIntExtra("level", -1), scale = i.getIntExtra("scale", -1);
             int plugged = i.getIntExtra("plugged", 0);
-            charging = plugged != 0;
+            boolean nowCharging = plugged != 0;
+            if (nowCharging && !wasCharging) say("Зарядка началась.");
+            if (!nowCharging && wasCharging) say("Телефон снят с зарядки.");
+            wasCharging = nowCharging;
+            charging = nowCharging;
             if (level >= 0 && scale > 0) lastPct = level * 100 / scale;
+            if (lastPct >= 99 && nowCharging && !wasFull) { wasFull = true; say("Батарея полностью заряжена. Можно отключать от зарядки."); }
+            if (lastPct < 95) wasFull = false;
             refreshStatus();
             if (level < 0 || scale <= 0) return;
             int pct = lastPct;
             if (plugged != 0) {
-                if (battOverlay != null) { frame.removeView(battOverlay); battOverlay = null; say("Зарядка началась. Спасибо!"); }
+                if (battOverlay != null) { frame.removeView(battOverlay); battOverlay = null; }
                 battWarned = false;
                 return;
             }
             if (pct <= 5) { showBattOverlay(); return; }
             if (pct <= 15 && !battWarned) { battWarned = true; say("Батарея пятнадцать процентов. Поставьте телефон на зарядку, пожалуйста."); }
         }
-    }
-
+}
     void showBattOverlay() {
         if (battOverlay != null) return;
         battOverlay = new LinearLayout(this);

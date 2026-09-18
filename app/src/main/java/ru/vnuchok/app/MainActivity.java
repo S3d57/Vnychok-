@@ -11,13 +11,15 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
-import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -30,17 +32,23 @@ import android.provider.Settings;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.telephony.SmsManager;
+import android.telephony.TelephonyManager;
 import android.location.Location;
 import android.location.LocationManager;
-import android.util.Size;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.style.AbsoluteSizeSpan;
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.NumberPicker;
 import android.widget.ScrollView;
@@ -48,7 +56,6 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -58,38 +65,58 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     Handler H = new Handler(Looper.getMainLooper());
     FrameLayout frame; ScrollView scroll;
-    TextView caption, userSay, timeView, dateView;
-    Button micBtn;
+    TextView caption, userSay, timeView, dateView, sbBatt, sbOper, sbNet, sbPopup;
+    Button micBtn, msgTile, callTile;
     TextToSpeech tts; boolean ttsReady;
-    SpeechRecognizer sr, cSr;
-    boolean torchOn, battWarned, listening;
+    SpeechRecognizer sr, cSr, compSr;
+    boolean torchOn, battWarned, listening, pendingConfirm, compListen;
+    int lastPct = -1;
     LinearLayout battOverlay, remOverlay, confirmOverlay;
     String lastSay = "", pendingNum = "", pendingLabel = "";
-    BatteryReceiver battRec;
-    Runnable clockRun;
+    BatteryReceiver battRec; BroadcastReceiver smsRec;
+    Runnable clockRun, missRun;
     SharedPreferences P;
     float FS = 1f;
-    Runnable sosTicker;
+    Runnable sosTicker; volatile boolean sosActive;
+    EditText composeEt;
+    Calendar selDate;
+    String BG = "#F4E3BD", CARD = "#FFFDF4", TILE = "#F9ECCA", TFG = "#7A4A21", ACC = "#D94F1E", DARK = "#4A2C17", EDGE = "#C98D4F", MUT = "#8A6A3A";
 
     static final String DEF_CONTACTS = "Дочь Маша|+79000000001\nВнук Миша|+7900000002\nВнучка Оля|+7900000003\nСоседка Нина|+7900000004\nВрач Ирина|+7900000005";
+    static final String[] DN = {"ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"};
+    static final String[] MN = {"ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ", "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ"};
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         P = getSharedPreferences("vnuchok", MODE_PRIVATE);
         FS = P.getFloat("fs", 1f);
+        applyTheme(P.getInt("theme", 0));
         requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO,
                 android.Manifest.permission.CALL_PHONE, android.Manifest.permission.SEND_SMS,
-                android.Manifest.permission.READ_SMS, android.Manifest.permission.READ_CALL_LOG,
-                android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION,
-                android.Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
+                android.Manifest.permission.READ_SMS, android.Manifest.permission.RECEIVE_SMS,
+                android.Manifest.permission.READ_CALL_LOG,
+                android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION}, 1);
         frame = new FrameLayout(this);
-        frame.setBackgroundColor(Color.parseColor("#F4E3BD"));
+        frame.setBackgroundColor(Color.parseColor(BG));
         scroll = new ScrollView(this);
         frame.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(frame);
         tts = new TextToSpeech(this, this);
         battRec = new BatteryReceiver();
         registerReceiver(battRec, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        smsRec = new BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent i) {
+                H.post(() -> {
+                    if (sbPopup != null) { sbPopup.setText("✉ НОВОЕ СООБЩЕНИЕ!"); sbPopup.setVisibility(View.VISIBLE); blink(sbPopup, true); H.postDelayed(() -> { sbPopup.setVisibility(View.GONE); blink(sbPopup, false); }, 10000); }
+                    if (msgTile != null) blink(msgTile, true);
+                    say("Пришло новое сообщение. Нажмите кнопку сообщения, чтобы прочитать.");
+                });
+            }
+        };
+        try { registerReceiver(smsRec, new IntentFilter("android.provider.Telephony.SMS_RECEIVED")); } catch (Exception e) {}
+        missRun = new Runnable() { public void run() { checkMissed(); H.postDelayed(this, 20000); } };
+        H.postDelayed(missRun, 10000);
         showMain();
         if (getIntent() != null && getIntent().hasExtra("reminder")) showReminder(getIntent().getStringExtra("reminder"));
     }
@@ -100,7 +127,20 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     @Override public void onInit(int s) {
-        if (s == TextToSpeech.SUCCESS) { ttsReady = true; tts.setLanguage(new Locale("ru")); tts.setSpeechRate(P.getFloat("rate", 0.75f)); }
+        if (s == TextToSpeech.SUCCESS) {
+            ttsReady = true; tts.setLanguage(new Locale("ru")); tts.setSpeechRate(P.getFloat("rate", 0.75f));
+            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                public void onStart(String id) {}
+                public void onDone(String id) { if (pendingConfirm) H.post(() -> { pendingConfirm = false; startConfirmListen(); }); }
+                public void onError(String id) { if (pendingConfirm) H.post(() -> { pendingConfirm = false; startConfirmListen(); }); }
+            });
+        }
+    }
+
+    void applyTheme(int t) {
+        if (t == 1) { BG = "#EAD9B0"; CARD = "#FBF3E0"; TILE = "#C73E1D"; TFG = "#FFF3E0"; ACC = "#B53A24"; DARK = "#2B2B2B"; EDGE = "#7A1F0D"; MUT = "#6B4F3A"; }
+        else if (t == 2) { BG = "#101426"; CARD = "#1B2137"; TILE = "#232A45"; TFG = "#7FE7EE"; ACC = "#00B8C8"; DARK = "#E6F1FF"; EDGE = "#00E5FF"; MUT = "#8FA3C8"; }
+        else { BG = "#F4E3BD"; CARD = "#FFFDF4"; TILE = "#F9ECCA"; TFG = "#7A4A21"; ACC = "#D94F1E"; DARK = "#4A2C17"; EDGE = "#C98D4F"; MUT = "#8A6A3A"; }
     }
 
     void say(String t) {
@@ -112,14 +152,29 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void speak(String t) { if (ttsReady && !t.isEmpty()) tts.speak(t, TextToSpeech.QUEUE_FLUSH, null, "s"); }
 
     int dp(int x) { return Math.round(x * getResources().getDisplayMetrics().density); }
+    int px(float sp) { return Math.round(sp * getResources().getDisplayMetrics().scaledDensity); }
     int shade(int c, float f) { return Color.argb(255, Math.max(0, Math.min(255, (int) (Color.red(c) * f))), Math.max(0, Math.min(255, (int) (Color.green(c) * f))), Math.max(0, Math.min(255, (int) (Color.blue(c) * f)))); }
 
     TextView tv(String s, float size, String color, boolean bold) {
         TextView t = new TextView(this);
         t.setText(s); t.setTextSize(size * FS); t.setTextColor(Color.parseColor(color));
         if (bold) t.getPaint().setFakeBoldText(true);
-        t.setPadding(0, dp(4), 0, dp(4));
+        t.setPadding(0, dp(3), 0, dp(3));
         return t;
+    }
+
+    void blink(View v, boolean on) {
+        if (v == null) return;
+        if (on) {
+            v.animate().cancel();
+            ObjectAnimator oa = ObjectAnimator.ofFloat(v, "alpha", 1f, 0.25f);
+            oa.setDuration(500); oa.setRepeatMode(ValueAnimator.REVERSE); oa.setRepeatCount(ValueAnimator.INFINITE);
+            oa.start(); v.setTag(oa);
+        } else {
+            Object o = v.getTag();
+            if (o instanceof ObjectAnimator) ((ObjectAnimator) o).cancel();
+            v.animate().alpha(1f);
+        }
     }
 
     void clickFx(View v) {
@@ -131,18 +186,34 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         v.animate().translationY(dp(4)).setDuration(60).withEndAction(() -> v.animate().translationY(0).setDuration(60));
     }
 
+    LayerDrawable bg3(String bg) {
+        int top = Color.parseColor(bg);
+        GradientDrawable gb = new GradientDrawable(); gb.setColor(shade(top, 0.45f)); gb.setCornerRadius(dp(14)); gb.setStroke(dp(2), shade(top, 0.25f));
+        GradientDrawable gt = new GradientDrawable(); gt.setColor(top); gt.setCornerRadius(dp(14)); gt.setStroke(dp(2), shade(top, 0.65f));
+        LayerDrawable ld = new LayerDrawable(new Drawable[]{gb, gt});
+        ld.setLayerInset(1, 0, 0, 0, dp(8));
+        return ld;
+    }
+
     Button big(String text, String bg, String fg, View.OnClickListener l) {
         Button b = new Button(this);
         b.setText(text); b.setTextSize(20 * FS); b.setTextColor(Color.parseColor(fg));
         b.setAllCaps(false); b.getPaint().setFakeBoldText(true);
-        b.setTypeface(android.graphics.Typeface.MONOSPACE);
-        int top = Color.parseColor(bg);
-        GradientDrawable gb = new GradientDrawable(); gb.setColor(shade(top, 0.45f)); gb.setCornerRadius(dp(12)); gb.setStroke(dp(2), shade(top, 0.25f));
-        GradientDrawable gt = new GradientDrawable(); gt.setColor(top); gt.setCornerRadius(dp(12)); gt.setStroke(dp(2), shade(top, 0.65f));
-        LayerDrawable ld = new LayerDrawable(new android.graphics.drawable.Drawable[]{gb, gt});
-        ld.setLayerInset(1, 0, 0, 0, dp(8));
-        b.setBackground(ld);
+        b.setBackground(bg3(bg));
         b.setPadding(dp(10), dp(16), dp(10), dp(24));
+        b.setOnClickListener(v -> { clickFx(v); l.onClick(v); });
+        return b;
+    }
+
+    Button tileBtn(String icon, String label, String bg, String fg, View.OnClickListener l) {
+        Button b = new Button(this);
+        SpannableString ss = new SpannableString(icon + "\n" + label);
+        ss.setSpan(new AbsoluteSizeSpan(px(30 * FS)), 0, icon.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ss.setSpan(new AbsoluteSizeSpan(px(15 * FS)), icon.length() + 1, ss.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        b.setText(ss);
+        b.setTextColor(Color.parseColor(fg));
+        b.setBackground(bg3(bg));
+        b.setPadding(dp(6), dp(10), dp(6), dp(16));
         b.setOnClickListener(v -> { clickFx(v); l.onClick(v); });
         return b;
     }
@@ -150,7 +221,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     LinearLayout col() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
-        l.setPadding(dp(20), dp(20), dp(20), dp(20));
+        l.setPadding(dp(18), dp(14), dp(18), dp(18));
         l.setGravity(Gravity.CENTER_HORIZONTAL);
         return l;
     }
@@ -158,7 +229,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     LinearLayout row() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.HORIZONTAL);
-        l.setPadding(0, dp(5), 0, dp(5));
+        l.setPadding(0, dp(4), 0, dp(4));
         return l;
     }
 
@@ -174,116 +245,162 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     String curDate() {
         Calendar c = Calendar.getInstance();
         String[] days = {"ВОСКРЕСЕНЬЕ", "ПОНЕДЕЛЬНИК", "ВТОРНИК", "СРЕДА", "ЧЕТВЕРГ", "ПЯТНИЦА", "СУББОТА"};
-        String[] mons = {"ЯНВАРЯ", "ФЕВРАЛЯ", "МАРТА", "АПРЕЛЯ", "МАЯ", "ИЮНЯ", "ИЮЛЯ", "АВГУСТА", "СЕНТЯБРЯ", "ОКТЯБРЯ", "НОЯБРЯ", "ДЕКАБРЯ"};
-        return days[c.get(Calendar.DAY_OF_WEEK) - 1] + ", " + c.get(Calendar.DAY_OF_MONTH) + " " + mons[c.get(Calendar.MONTH)];
+        return days[c.get(Calendar.DAY_OF_WEEK) - 1] + ", " + c.get(Calendar.DAY_OF_MONTH) + " " + MN[c.get(Calendar.MONTH)];
+    }
+
+    void refreshStatus() {
+        H.post(() -> {
+            if (sbBatt != null) sbBatt.setText("🔋 " + (lastPct >= 0 ? lastPct + "%" : "--"));
+            if (sbOper != null) { try { TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE); String op = tm.getNetworkOperatorName(); sbOper.setText(op == null || op.isEmpty() ? "📶" : op); } catch (Exception e) { sbOper.setText("📶"); } }
+            if (sbNet != null) { try { ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE); Network n = cm.getActiveNetwork(); sbNet.setText(n != null ? "🌐 ИНТЕРНЕТ" : "✖ БЕЗ СЕТИ"); } catch (Exception e) { sbNet.setText(""); } }
+        });
+    }
+
+    void checkMissed() {
+        try {
+            long last = P.getLong("lastMissed", 0);
+            Cursor cur = getContentResolver().query(CallLog.Calls.CONTENT_URI,
+                    new String[]{CallLog.Calls.NUMBER, CallLog.Calls.DATE},
+                    CallLog.Calls.TYPE + "=" + CallLog.Calls.MISSED_TYPE, null, CallLog.Calls.DATE + " DESC LIMIT 1");
+            if (cur != null) {
+                if (cur.moveToFirst()) {
+                    long d = cur.getLong(1);
+                    String num = cur.getString(0);
+                    if (d > last && last > 0) {
+                        H.post(() -> { if (sbPopup != null) { sbPopup.setText("✗ ПРОПУЩЕННЫЙ: " + nameForNumber(num)); sbPopup.setVisibility(View.VISIBLE); blink(sbPopup, true); H.postDelayed(() -> { sbPopup.setVisibility(View.GONE); blink(sbPopup, false); }, 10000); } if (callTile != null) blink(callTile, true); say("Пропущенный звонок: " + nameForNumber(num)); });
+                    }
+                    if (last == 0) P.edit().putLong("lastMissed", d).apply();
+                }
+                cur.close();
+            }
+        } catch (Exception e) {}
     }
 
     // ---------- ГЛАВНЫЙ ЭКРАН ----------
     void showMain() {
+        applyTheme(P.getInt("theme", 0));
+        frame.setBackgroundColor(Color.parseColor(BG));
         LinearLayout c = col();
-        TextView gear = tv("⚙", 22, "#A97B3F", true);
-        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        gl.gravity = Gravity.END;
-        gear.setLayoutParams(gl);
+
+        LinearLayout sb = row();
+        sbBatt = tv("🔋 --%", 15, DARK, true);
+        sbOper = tv("📶", 15, DARK, true);
+        sbNet = tv("", 15, DARK, true);
+        TextView gear = tv("⚙", 20, MUT, true);
+        sbOper.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        sbNet.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         gear.setOnLongClickListener(v -> { showSettings(); return true; });
         gear.setOnClickListener(v -> say("Шестерёнка — настройки для родных. Нажмите и держите палец."));
-        c.addView(gear);
+        sb.addView(sbBatt); sb.addView(sbOper); sb.addView(sbNet); sb.addView(gear);
+        c.addView(sb);
+        sbPopup = tv("", 16, "#C0392B", true);
+        sbPopup.setVisibility(View.GONE);
+        c.addView(sbPopup);
+        refreshStatus();
 
-        timeView = tv(curTime(), 52, "#4A2C17", true);
+        timeView = tv(curTime(), 54, DARK, true);
         timeView.setGravity(Gravity.CENTER);
-        timeView.setOnClickListener(v -> openCalendar());
+        timeView.setOnClickListener(v -> showCalendar(false));
         c.addView(timeView);
-        dateView = tv(curDate(), 17, "#8A6A3A", true);
+        dateView = tv(curDate(), 17, MUT, true);
         dateView.setGravity(Gravity.CENTER);
-        dateView.setOnClickListener(v -> openCalendar());
+        dateView.setOnClickListener(v -> showCalendar(false));
         c.addView(dateView);
-        c.addView(tv("(нажмите на часы — откроется календарь)", 11, "#A97B3F", false));
-        if (clockRun == null) clockRun = new Runnable() { public void run() { if (timeView != null) { timeView.setText(curTime()); dateView.setText(curDate()); } H.postDelayed(this, 20000); } };
+        if (clockRun == null) clockRun = new Runnable() { public void run() { if (timeView != null) { timeView.setText(curTime()); dateView.setText(curDate()); refreshStatus(); } H.postDelayed(this, 20000); } };
         H.postDelayed(clockRun, 20000);
 
-        micBtn = big("🎙  НАЖМИТЕ", "#D94F1E", "#FFFFFF", v -> startListenOnMain());
+        micBtn = big("🎙\nНАЖМИТЕ", ACC, "#FFFFFF", v -> startListenOnMain());
         GradientDrawable og = new GradientDrawable();
-        og.setColor(Color.parseColor("#D94F1E")); og.setShape(GradientDrawable.OVAL);
-        int topRim = Color.parseColor("#F6E7C6");
-        og.setStroke(dp(7), topRim);
+        og.setColor(Color.parseColor(ACC)); og.setShape(GradientDrawable.OVAL);
+        og.setStroke(dp(7), Color.parseColor(CARD));
         micBtn.setBackground(og);
+        SpannableString ms = new SpannableString("🎙\nНАЖМИТЕ");
+        ms.setSpan(new AbsoluteSizeSpan(px(34 * FS)), 0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ms.setSpan(new AbsoluteSizeSpan(px(20 * FS)), 2, ms.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        micBtn.setText(ms);
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(dp(200), dp(200));
-        mp.topMargin = dp(10); mp.bottomMargin = dp(6);
+        mp.topMargin = dp(8); mp.bottomMargin = dp(6);
         micBtn.setLayoutParams(mp);
-        micBtn.setTextSize(22 * FS);
         c.addView(micBtn);
 
         LinearLayout capBox = new LinearLayout(this);
+        capBox.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable cg = new GradientDrawable();
-        cg.setColor(Color.parseColor("#FFFDF4")); cg.setCornerRadius(dp(12));
-        cg.setStroke(dp(3), Color.parseColor("#C98D4F"));
+        cg.setColor(Color.parseColor(CARD)); cg.setCornerRadius(dp(12));
+        cg.setStroke(dp(3), Color.parseColor(EDGE));
         capBox.setBackground(cg); capBox.setPadding(dp(14), dp(12), dp(14), dp(12));
-        userSay = tv("ВЫ: (нажмите кнопку и говорите)", 16, "#8A6A3A", true);
+        capBox.setGravity(Gravity.START);
+        userSay = tv("ВЫ: (нажмите кнопку и говорите)", 16, MUT, true);
+        userSay.setGravity(Gravity.START);
         capBox.addView(userSay);
-        caption = tv("ВНУЧОК: «Здравствуйте! Нажмите кнопку и говорите.»", 20, "#54300F", true);
+        caption = tv("ВНУЧОК: «Здравствуйте! Нажмите кнопку и говорите.»", 20, DARK, true);
+        caption.setGravity(Gravity.START);
         capBox.addView(caption);
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cp.topMargin = dp(8); cp.bottomMargin = dp(8);
+        cp.topMargin = dp(6); cp.bottomMargin = dp(6);
         capBox.setLayoutParams(cp);
         c.addView(capBox);
 
-        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        hp.setMargins(dp(4), 0, dp(4), 0);
-        String[][] tiles = {
-                {"📞 ПОЗВОНИТЬ", "1"}, {"✉️ СООБЩЕНИЯ", "2"}, {"☎ НАБОР", "3"},
-                {"📷 ФОТО", "4"}, {"🖼 ФОТОАЛЬБОМ", "5"}, {"📝 НАПОМИНАНИЯ", "6"},
-                {"⏰ БУДИЛЬНИК", "7"}, {"🔦 ФОНАРЬ", "8"}, {"🔧 ПРОЧЕЕ", "9"}};
-        for (int r = 0; r < 3; r++) {
-            LinearLayout rw = row();
-            for (int k = 0; k < 3; k++) {
-                final String id = tiles[r * 3 + k][1];
-                Button tb = big(tiles[r * 3 + k][0], "#F9ECCA", "#7A4A21", v -> tileClick(id));
-                tb.setTextSize(13 * FS);
-                tb.setLayoutParams(hp);
-                rw.addView(tb);
-            }
-            c.addView(rw);
-        }
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, dp(120), 1f);
+        hp.setMargins(dp(4), dp(3), dp(4), dp(3));
+        callTile = tileBtn("📞", "ПОЗВОНИТЬ", TILE, TFG, v -> showContacts(true));
+        msgTile = tileBtn("✉️", "СООБЩЕНИЯ", TILE, TFG, v -> { blink(msgTile, false); P.edit().putLong("lastSmsSeen", System.currentTimeMillis()).apply(); showSmsList(); });
+        Button t3 = tileBtn("☎", "НАБОР", TILE, TFG, v -> showDial());
+        LinearLayout r1 = row();
+        callTile.setLayoutParams(hp); msgTile.setLayoutParams(hp); t3.setLayoutParams(hp);
+        r1.addView(callTile); r1.addView(msgTile); r1.addView(t3);
+        c.addView(r1);
+        Button t4 = tileBtn("📷", "ФОТО", TILE, TFG, v -> { try { startActivity(new Intent(MediaStore.ACTION_IMAGE_CAPTURE)); say("Открыл фотоаппарат."); } catch (Exception e) { say("Камера не открылась."); } });
+        Button t5 = tileBtn("🖼", "ФОТОАЛЬБОМ", TILE, TFG, v -> openPhotoalbum());
+        Button t6 = tileBtn("📝", "НАПОМИНАНИЯ", TILE, TFG, v -> showReminders());
+        LinearLayout r2 = row();
+        t4.setLayoutParams(hp); t5.setLayoutParams(hp); t6.setLayoutParams(hp);
+        r2.addView(t4); r2.addView(t5); r2.addView(t6);
+        c.addView(r2);
+        Button t7 = tileBtn("⏰", "БУДИЛЬНИК", TILE, TFG, v -> showAlarms());
+        Button t8 = tileBtn("🔦", "ФОНАРЬ", TILE, TFG, v -> toggleTorch());
+        Button t9 = tileBtn("🔧", "ПРОЧЕЕ", TILE, TFG, v -> showExtra());
+        LinearLayout r3 = row();
+        t7.setLayoutParams(hp); t8.setLayoutParams(hp); t9.setLayoutParams(hp);
+        r3.addView(t7); r3.addView(t8); r3.addView(t9);
+        c.addView(r3);
+
         Button sos = big("🆘 SOS — ВЫЗВАТЬ ПОМОЩЬ (112)", "#C0392B", "#FFFFFF", v -> startSos());
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sp.topMargin = dp(8);
+        sp.topMargin = dp(6);
         sos.setLayoutParams(sp);
         c.addView(sos);
 
-        c.addView(tv("ДРУГИЕ ПРИЛОЖЕНИЯ", 14, "#8A6A3A", true));
-        LinearLayout.LayoutParams hp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        hp2.setMargins(dp(3), 0, dp(3), 0);
-        List<String[]> apps = installedApps();
-        LinearLayout ar = null;
-        int n = 0;
-        for (final String[] a : apps) {
-            if (n % 3 == 0) { ar = row(); c.addView(ar); }
-            Button ab = big(a[0], "#E9D0A0", "#54300F", v -> openPackage(a[1]));
-            ab.setTextSize(11 * FS);
-            ab.setLayoutParams(hp2);
-            ar.addView(ab);
-            n++;
+        if (P.getBoolean("showApps", true)) {
+            c.addView(tv("ДРУГИЕ ПРИЛОЖЕНИЯ", 14, MUT, true));
+            LinearLayout.LayoutParams hp2 = new LinearLayout.LayoutParams(0, dp(100), 1f);
+            hp2.setMargins(dp(3), dp(3), dp(3), dp(3));
+            List<Object[]> apps = installedApps();
+            LinearLayout ar = null;
+            int n = 0;
+            for (final Object[] a : apps) {
+                if (n % 3 == 0) { ar = row(); c.addView(ar); }
+                Button ab = new Button(this);
+                ab.setText((String) a[0]);
+                ab.setTextSize(11 * FS); ab.setTextColor(Color.parseColor(TFG));
+                ab.setBackground(bg3(TILE));
+                Drawable ic = (Drawable) a[1];
+                if (ic != null) { ic.setBounds(0, 0, dp(40), dp(40)); ab.setCompoundDrawables(null, ic, null, null); }
+                ab.setOnClickListener(v -> { clickFx(v); openPackage((String) a[2]); });
+                ab.setLayoutParams(hp2);
+                ar.addView(ab);
+                n++;
+            }
+            if (n == 0) c.addView(tv("(нет других приложений)", 13, MUT, false));
         }
-        if (n == 0) c.addView(tv("(нет других приложений)", 13, "#8A6A3A", false));
         setScreen(c);
     }
 
-    void openCalendar() {
-        try {
-            Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setData(Uri.parse("content://com.android.calendar/time/" + System.currentTimeMillis()));
-            startActivity(i);
-        } catch (Exception e) {
-            try { startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR)); }
-            catch (Exception e2) { say("Календарь не установлен."); }
-        }
-    }
-
     void startListenOnMain() {
-        if (listening) { stopListening(); micBtn.setText("🎙  НАЖМИТЕ"); return; }
+        if (listening) { stopListening(); setMicLabel("НАЖМИТЕ"); return; }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) { say("Телефон не умеет слушать."); return; }
         listening = true;
-        micBtn.setText("🎙  ГОВОРИТЕ");
+        setMicLabel("ГОВОРИТЕ");
         userSay.setText("ВЫ: (слушаю…)");
         sr = SpeechRecognizer.createSpeechRecognizer(this);
         Intent it = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -295,12 +412,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             public void onBeginningOfSpeech() {}
             public void onRmsChanged(float v) {}
             public void onBufferReceived(byte[] b) {}
-            public void onEndOfSpeech() { H.post(() -> { listening = false; micBtn.setText("🎙  НАЖМИТЕ"); }); }
-            public void onError(int e) { H.post(() -> { listening = false; micBtn.setText("🎙  НАЖМИТЕ"); userSay.setText("ВЫ: (не расслышал, повторите)"); say("Не расслышал. Повторите, пожалуйста."); }); }
+            public void onEndOfSpeech() { H.post(() -> { listening = false; setMicLabel("НАЖМИТЕ"); }); }
+            public void onError(int e) { H.post(() -> { listening = false; setMicLabel("НАЖМИТЕ"); userSay.setText("ВЫ: (не расслышал, повторите)"); say("Не расслышал. Повторите, пожалуйста."); }); }
             public void onResults(Bundle r) {
                 ArrayList<String> a = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 String t = (a != null && !a.isEmpty()) ? a.get(0) : "";
-                H.post(() -> { listening = false; micBtn.setText("🎙  НАЖМИТЕ"); if (!t.isEmpty()) { userSay.setText("ВЫ: «" + t + "»"); handleCommand(t); } else userSay.setText("ВЫ: (пусто)"); });
+                H.post(() -> { listening = false; setMicLabel("НАЖМИТЕ"); if (!t.isEmpty()) { userSay.setText("ВЫ: «" + t + "»"); handleCommand(t); } else userSay.setText("ВЫ: (пусто)"); });
             }
             public void onPartialResults(Bundle r) {
                 ArrayList<String> a = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
@@ -308,7 +425,15 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             }
             public void onEvent(int i, Bundle b) {}
         });
-        try { sr.startListening(it); } catch (Exception e) { say("Микрофон не открылся."); listening = false; micBtn.setText("🎙  НАЖМИТЕ"); }
+        try { sr.startListening(it); } catch (Exception e) { say("Микрофон не открылся."); listening = false; setMicLabel("НАЖМИТЕ"); }
+    }
+
+    void setMicLabel(String s) {
+        if (micBtn == null) return;
+        SpannableString ms = new SpannableString("🎙\n" + s);
+        ms.setSpan(new AbsoluteSizeSpan(px(34 * FS)), 0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        ms.setSpan(new AbsoluteSizeSpan(px(20 * FS)), 2, ms.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        micBtn.setText(ms);
     }
 
     void stopListening() {
@@ -322,18 +447,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         cSr = null;
     }
 
-    void tileClick(String id) {
-        switch (id) {
-            case "1": showContacts(true); break;
-            case "2": showSmsList(); break;
-            case "3": showDial(); break;
-            case "4": try { startActivity(new Intent(MediaStore.ACTION_IMAGE_CAPTURE)); say("Открыл фотоаппарат."); } catch (Exception e) { say("Камера не открылась."); } break;
-            case "5": openPhotoalbum(); break;
-            case "6": showReminders(); break;
-            case "7": showAlarms(); break;
-            case "8": toggleTorch(); break;
-            case "9": showExtra(); break;
-        }
+    void stopCompListen() {
+        compListen = false;
+        try { if (compSr != null) { compSr.stopListening(); compSr.cancel(); compSr.destroy(); } } catch (Exception e) {}
+        compSr = null;
     }
 
     void openPhotoalbum() {
@@ -350,22 +467,19 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     void showExtra() {
         LinearLayout c = col();
-        c.addView(tv("ПРОЧЕЕ", 26, "#54300F", true));
+        c.addView(tv("ПРОЧЕЕ", 26, DARK, true));
         String[][] items = {
-                {"🕐 ИСТОРИЯ ЗВОНКОВ", "history"}, {"📻 РАДИО", "radio"},
-                {"🗺 КАРТА", "maps"}, {"🎵 МУЗЫКА", "music"},
-                {"📱 ТЕЛЕФОН", "phone"}, {"🌤 ПОГОДА", "weather"}
-        };
+                {"📻 РАДИО", "radio"}, {"🗺 КАРТА", "maps"}, {"🎵 МУЗЫКА", "music"},
+                {"📱 ТЕЛЕФОН", "phone"}, {"🌤 ПОГОДА", "weather"}};
         for (final String[] it : items) {
-            c.addView(big(it[0], "#F9ECCA", "#7A4A21", v -> extraClick(it[1])));
+            c.addView(big(it[0], TILE, TFG, v -> extraClick(it[1])));
         }
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
     }
 
     void extraClick(String id) {
         switch (id) {
-            case "history": showHistory(); break;
             case "radio": openAppKeyword("радио"); break;
             case "maps": try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0"))); } catch (Exception e) { openAppKeyword("карт"); } break;
             case "music": openAppKeyword("музык"); break;
@@ -386,17 +500,101 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         say("Приложение не найдено.");
     }
 
+    // ---------- СВОЙ КАЛЕНДАРЬ ----------
+    Calendar calCur;
+    void showCalendar(boolean pick) {
+        if (calCur == null) calCur = Calendar.getInstance();
+        renderCalendar(pick);
+    }
+
+    void renderCalendar(boolean pick) {
+        LinearLayout c = col();
+        c.addView(tv(pick ? "ВЫБОР ДАТЫ" : "КАЛЕНДАРЬ", 26, DARK, true));
+        LinearLayout hr = row();
+        Button prev = big("◀", TILE, TFG, v -> { calCur.add(Calendar.MONTH, -1); renderCalendar(pick); });
+        TextView title = tv(MN[calCur.get(Calendar.MONTH)] + " " + calCur.get(Calendar.YEAR), 20, DARK, true);
+        title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        title.setGravity(Gravity.CENTER);
+        Button next = big("▶", TILE, TFG, v -> { calCur.add(Calendar.MONTH, 1); renderCalendar(pick); });
+        prev.setLayoutParams(new LinearLayout.LayoutParams(dp(80), ViewGroup.LayoutParams.WRAP_CONTENT));
+        next.setLayoutParams(new LinearLayout.LayoutParams(dp(80), ViewGroup.LayoutParams.WRAP_CONTENT));
+        hr.addView(prev); hr.addView(title); hr.addView(next);
+        c.addView(hr);
+        LinearLayout wr = row();
+        for (String d : DN) {
+            TextView w = tv(d, 13, MUT, true);
+            w.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            w.setGravity(Gravity.CENTER);
+            wr.addView(w);
+        }
+        c.addView(wr);
+        Calendar first = (Calendar) calCur.clone();
+        first.set(Calendar.DAY_OF_MONTH, 1);
+        int off = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7;
+        int dim = calCur.getActualMaximum(Calendar.DAY_OF_MONTH);
+        Calendar today = Calendar.getInstance();
+        LinearLayout dr = null;
+        int cell = 0;
+        for (int i = 0; i < off; i++) {
+            if (cell % 7 == 0) { dr = row(); c.addView(dr); }
+            TextView e = tv("", 16, DARK, false);
+            e.setLayoutParams(new LinearLayout.LayoutParams(0, dp(46), 1f));
+            dr.addView(e);
+            cell++;
+        }
+        for (int d = 1; d <= dim; d++) {
+            if (cell % 7 == 0) { dr = row(); c.addView(dr); }
+            final int day = d;
+            boolean isToday = day == today.get(Calendar.DAY_OF_MONTH) && calCur.get(Calendar.MONTH) == today.get(Calendar.MONTH) && calCur.get(Calendar.YEAR) == today.get(Calendar.YEAR);
+            Button db = big(String.valueOf(day), isToday ? ACC : TILE, isToday ? "#FFFFFF" : TFG, v -> {
+                if (pick) { selDate.set(Calendar.YEAR, calCur.get(Calendar.YEAR)); selDate.set(Calendar.MONTH, calCur.get(Calendar.MONTH)); selDate.set(Calendar.DAY_OF_MONTH, day); showRemEditor(); }
+                else { say(day + " " + MN[calCur.get(Calendar.MONTH)].toLowerCase() + ": напоминаний " + countOnDay(day)); }
+            });
+            db.setTextSize(16 * FS);
+            db.setLayoutParams(new LinearLayout.LayoutParams(0, dp(46), 1f));
+            dr.addView(db);
+            cell++;
+        }
+        if (!pick) c.addView(tv("Нажмите на дату — скажу, что запланировано", 13, MUT, false));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
+        setScreen(c);
+    }
+
+    int countOnDay(int day) {
+        int n = 0;
+        for (String[] r : rems()) {
+            Calendar rc = Calendar.getInstance();
+            rc.setTimeInMillis(Long.parseLong(r[0]));
+            if (rc.get(Calendar.DAY_OF_MONTH) == day && rc.get(Calendar.MONTH) == calCur.get(Calendar.MONTH)) n++;
+        }
+        return n;
+    }
+
     // ---------- НАСТРОЙКИ ----------
     void showSettings() {
         LinearLayout c = col();
-        c.addView(tv("⚙ НАСТРОЙКИ (для родных)", 24, "#54300F", true));
-        c.addView(tv("Размер текста:", 16, "#54300F", true));
+        c.addView(tv("⚙ НАСТРОЙКИ (для родных)", 22, DARK, true));
+        c.addView(tv("ТЕМА И ЭКРАН:", 16, DARK, true));
+        LinearLayout rt = row();
+        String[] thN = {"ТЁПЛАЯ", "ПЛАКАТ", "ПИКСЕЛЬ"};
+        for (int i = 0; i < 3; i++) {
+            final int ti = i;
+            Button b = big(thN[i], P.getInt("theme", 0) == i ? ACC : TILE, P.getInt("theme", 0) == i ? "#FFFFFF" : TFG, x -> { P.edit().putInt("theme", ti).apply(); showMain(); say("Тема изменена."); });
+            b.setTextSize(13 * FS);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMargins(dp(3), 0, dp(3), 0);
+            b.setLayoutParams(lp);
+            rt.addView(b);
+        }
+        c.addView(rt);
+        c.addView(toggleRow("Другие приложения на главном", "showApps", true));
+        c.addView(tv("Размер текста:", 16, DARK, true));
         LinearLayout r1 = row();
         String[] fsN = {"МЕЛКИЙ", "СРЕДНИЙ", "КРУПНЫЙ"};
         float[] fsV = {1f, 1.25f, 1.5f};
         for (int i = 0; i < 3; i++) {
             final float v = fsV[i];
-            Button b = big(fsN[i], Math.abs(FS - v) < 0.01 ? "#D94F1E" : "#F9ECCA", Math.abs(FS - v) < 0.01 ? "#FFFFFF" : "#7A4A21", x -> { P.edit().putFloat("fs", v).apply(); FS = v; showSettings(); say("Размер текста изменён."); });
+            Button b = big(fsN[i], Math.abs(FS - v) < 0.01 ? ACC : TILE, Math.abs(FS - v) < 0.01 ? "#FFFFFF" : TFG, x -> { P.edit().putFloat("fs", v).apply(); FS = v; showSettings(); say("Размер текста изменён."); });
             b.setTextSize(13 * FS);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.setMargins(dp(3), 0, dp(3), 0);
@@ -404,13 +602,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             r1.addView(b);
         }
         c.addView(r1);
-        c.addView(tv("Скорость речи:", 16, "#54300F", true));
+        c.addView(tv("Скорость речи:", 16, DARK, true));
         LinearLayout r2 = row();
-        String[] rtN = {"МЕДЛЕННО", "ОБЫЧНО", "БЫСТРО"};
-        float[] rtV = {0.6f, 0.9f, 1.2f};
+        String[] rn = {"МЕДЛЕННО", "ОБЫЧНО", "БЫСТРО"};
+        float[] rv = {0.6f, 0.9f, 1.2f};
         for (int i = 0; i < 3; i++) {
-            final float v = rtV[i];
-            Button b = big(rtN[i], Math.abs(P.getFloat("rate", 0.75f) - v) < 0.05 ? "#D94F1E" : "#F9ECCA", Math.abs(P.getFloat("rate", 0.75f) - v) < 0.05 ? "#FFFFFF" : "#7A4A21", x -> { P.edit().putFloat("rate", v).apply(); if (ttsReady) tts.setSpeechRate(v); showSettings(); say("Скорость речи изменена."); });
+            final float v = rv[i];
+            Button b = big(rn[i], Math.abs(P.getFloat("rate", 0.75f) - v) < 0.05 ? ACC : TILE, Math.abs(P.getFloat("rate", 0.75f) - v) < 0.05 ? "#FFFFFF" : TFG, x -> { P.edit().putFloat("rate", v).apply(); if (ttsReady) tts.setSpeechRate(v); showSettings(); say("Скорость речи изменена."); });
             b.setTextSize(13 * FS);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             lp.setMargins(dp(3), 0, dp(3), 0);
@@ -420,24 +618,26 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         c.addView(r2);
         c.addView(toggleRow("Ответы вслух", "voice", true));
         c.addView(toggleRow("Щелчки и вибрация кнопок", "sound", true));
-        c.addView(tv("СИСТЕМНЫЕ НАСТРОЙКИ:", 16, "#54300F", true));
+        c.addView(tv("СИСТЕМНЫЕ НАСТРОЙКИ:", 16, DARK, true));
         String[][] sys = {
                 {"📲 PLAY МАРКЕТ", "market"}, {"📶 WI-FI", "wifi"}, {"📍 ГЕОЛОКАЦИЯ", "loc"},
                 {"🔵 BLUETOOTH", "bt"}, {"📡 МОБИЛЬНЫЕ СЕТИ", "mob"}, {"🗓 ДАТА И ВРЕМЯ", "dt"},
                 {"🔊 ГОЛОС ОЗВУЧКИ", "tts"}, {"📦 УСТАНОВЛЕННЫЕ", "apps"}, {"📁 ФАЙЛЫ ТЕЛЕФОНА", "files"},
-                {"ℹ️ О ПРИЛОЖЕНИИ", "about"}
-        };
+                {"ℹ️ О ПРИЛОЖЕНИИ", "about"}};
         for (final String[] s : sys) {
-            c.addView(big(s[0], "#E9D0A0", "#54300F", v -> sysClick(s[1])));
+            c.addView(big(s[0], TILE, TFG, v -> sysClick(s[1])));
         }
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
     }
 
     void sysClick(String id) {
         try {
             switch (id) {
-                case "market": startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=ru.vnuchok.app"))); break;
+                case "market":
+                    Intent pi = getPackageManager().getLaunchIntentForPackage("com.android.vending");
+                    if (pi != null) startActivity(pi); else startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=внучок")));
+                    break;
                 case "wifi": startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)); break;
                 case "loc": startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); break;
                 case "bt": startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)); break;
@@ -455,25 +655,23 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     void showAbout() {
         LinearLayout c = col();
-        c.addView(tv("О ПРИЛОЖЕНИИ", 26, "#54300F", true));
-        c.addView(tv("ВНУЧОК", 34, "#D94F1E", true));
-        c.addView(tv("Версия: 0.2", 20, "#54300F", true));
-        c.addView(tv("Оболочка Android для пенсионеров", 16, "#8A6A3A", true));
-        c.addView(tv("Все данные хранятся только на телефоне", 14, "#8A6A3A", true));
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(tv("ВНУЧОК", 34, ACC, true));
+        c.addView(tv("Версия: 0.3", 20, DARK, true));
+        c.addView(tv("Оболочка Android для пенсионеров", 16, MUT, true));
+        c.addView(tv("Все данные хранятся только на телефоне", 14, MUT, true));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
     }
 
     LinearLayout toggleRow(String label, String key, boolean def) {
         LinearLayout r = row();
-        TextView t = tv(label, 16, "#54300F", true);
+        TextView t = tv(label, 15, DARK, true);
         t.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         r.addView(t);
         boolean on = P.getBoolean(key, def);
         Button b = big(on ? "ВКЛ" : "ВЫКЛ", on ? "#3FAE4C" : "#8A8A8A", "#FFFFFF", x -> { P.edit().putBoolean(key, !P.getBoolean(key, def)).apply(); showSettings(); });
         b.setTextSize(13 * FS);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(110), ViewGroup.LayoutParams.WRAP_CONTENT);
-        b.setLayoutParams(lp);
+        b.setLayoutParams(new LinearLayout.LayoutParams(dp(110), ViewGroup.LayoutParams.WRAP_CONTENT));
         r.addView(b);
         return r;
     }
@@ -495,15 +693,15 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         if (t.contains("фотоальбом") || t.contains("галере") || t.contains("покажи фото")) { openPhotoalbum(); return; }
         if (t.contains("сфотографиру") || t.contains("фото") || t.contains("сними")) {
             try { startActivity(new Intent(MediaStore.ACTION_IMAGE_CAPTURE)); say("Открыл фотоаппарат."); } catch (Exception e) { say("Камера не открылась."); } return; }
-        if (t.contains("истори") || t.contains("кто звонил")) { showHistory(); return; }
+        if (t.contains("истори") || t.contains("кто звонил")) { showDial(); return; }
         if (t.contains("напомни") || t.contains("напоминан")) {
             if (t.contains("в ") || t.contains("через")) { setReminder(t); } else showReminders(); return; }
         if (t.contains("будильник")) { showAlarms(); return; }
         if (t.contains("настрой")) { showSettings(); return; }
         if (t.contains("набер") || t.contains("номер")) { showDial(); return; }
-        if (t.contains("который час") || t.contains("время") || t.contains("число")) { sayTime(); return; }
+        if (t.contains("календар") || t.contains("число")) { showCalendar(false); return; }
+        if (t.contains("который час") || t.contains("время")) { sayTime(); return; }
         if (t.contains("открой") || t.contains("запусти")) { openApp(t); return; }
-        if (t.contains("календар")) { openCalendar(); return; }
         if (t.contains("умеешь") || t.contains("помощь")) { say("Я умею: звонить, писать и читать СМС, набирать номер, показывать историю и фотоальбом, включать фонарь, напоминать, будить и вызывать помощь."); return; }
         if (t.contains("повтори")) { say(lastSay); return; }
         say("Не понял. Скажите: позвони, напиши, напомни, фонарь или помощь.");
@@ -543,12 +741,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     // ---------- КОНТАКТЫ ----------
     void showContacts(boolean callMode) {
         LinearLayout c = col();
-        c.addView(tv(callMode ? "КОМУ ЗВОНИМ?" : "КОМУ ПИШЕМ?", 26, "#54300F", true));
+        c.addView(tv(callMode ? "КОМУ ЗВОНИМ?" : "КОМУ ПИШЕМ?", 26, DARK, true));
         List<String[]> cs = contacts();
         for (int i = 0; i < cs.size(); i++) {
             final int idx = i;
             LinearLayout rw = row();
-            Button nb = big(cs.get(i)[0], "#F9ECCA", "#7A4A21", v -> { if (callMode) confirmCall(cs.get(idx)[0], cs.get(idx)[1]); else showCompose(idx); });
+            Button nb = big(cs.get(i)[0], TILE, TFG, v -> { if (callMode) confirmCall(cs.get(idx)[0], cs.get(idx)[1]); else showCompose(idx); });
             nb.setTextSize(16 * FS);
             nb.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             rw.addView(nb);
@@ -561,14 +759,14 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             c.addView(rw);
         }
         c.addView(big("➕ НОВЫЙ НОМЕР", "#3FAE4C", "#FFFFFF", v -> editContact(-1)));
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
     }
 
     void editContact(int idx) {
         List<String[]> cs = contacts();
         LinearLayout c = col();
-        c.addView(tv(idx < 0 ? "НОВЫЙ КОНТАКТ" : "ИЗМЕНИТЬ", 24, "#54300F", true));
+        c.addView(tv(idx < 0 ? "НОВЫЙ КОНТАКТ" : "ИЗМЕНИТЬ", 24, DARK, true));
         EditText en = new EditText(this); en.setTextSize(20 * FS); en.setHint("Имя (например: Дочь Маша)");
         if (idx >= 0) en.setText(cs.get(idx)[0]);
         c.addView(en);
@@ -583,7 +781,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             if (idx >= 0) x.set(idx, new String[]{n, p}); else x.add(new String[]{n, p});
             saveContacts(x); say("Сохранил: " + n); showContacts(true);
         }));
-        c.addView(big("ОТМЕНА", "#F9ECCA", "#7A4A21", v -> showContacts(true)));
+        c.addView(big("ОТМЕНА", TILE, TFG, v -> showContacts(true)));
         setScreen(c);
     }
 
@@ -593,16 +791,17 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         confirmOverlay.setGravity(Gravity.CENTER);
         confirmOverlay.setBackgroundColor(Color.parseColor("#CC4A2C17"));
         LinearLayout card = col();
-        card.setBackgroundColor(Color.parseColor("#F9EDD4"));
-        card.addView(tv(title, 24, "#54300F", true));
+        card.setBackgroundColor(Color.parseColor(CARD));
+        card.addView(tv(title, 24, DARK, true));
         card.addView(big("✅ ДА", "#3FAE4C", "#FFFFFF", v -> { removeConfirm(); yes.run(); }));
-        card.addView(big("✋ ОТМЕНА", "#F9ECCA", "#7A4A21", v -> { removeConfirm(); }));
+        card.addView(big("✋ ОТМЕНА", TILE, TFG, v -> removeConfirm()));
         confirmOverlay.addView(card);
         frame.addView(confirmOverlay);
     }
 
     void removeConfirm() {
         stopConfirmListen();
+        pendingConfirm = false;
         if (confirmOverlay != null) { frame.removeView(confirmOverlay); confirmOverlay = null; }
     }
 
@@ -613,18 +812,20 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         confirmOverlay.setGravity(Gravity.CENTER);
         confirmOverlay.setBackgroundColor(Color.parseColor("#CC4A2C17"));
         LinearLayout card = col();
-        card.setBackgroundColor(Color.parseColor("#F9EDD4"));
-        card.addView(tv("Звоним: " + label + "?", 26, "#54300F", true));
-        card.addView(tv("Скажите «да» или «нет»", 16, "#8A6A3A", true));
+        card.setBackgroundColor(Color.parseColor(CARD));
+        card.addView(tv("Звоним: " + label + "?", 26, DARK, true));
+        card.addView(tv("Скажите «да» или «нет»", 16, MUT, true));
         card.addView(big("✅ ДА, ЗВОНИ", "#3FAE4C", "#FFFFFF", v -> { removeConfirm(); callNumber(pendingNum, pendingLabel); }));
-        card.addView(big("✋ ОТМЕНА", "#F9ECCA", "#7A4A21", v -> { removeConfirm(); say("Отменил."); }));
+        card.addView(big("✋ ОТМЕНА", TILE, TFG, v -> { removeConfirm(); say("Отменил."); }));
         confirmOverlay.addView(card);
         frame.addView(confirmOverlay);
         say("Позвонить: " + label + "? Скажите да или нет.");
-        startConfirmListen();
+        pendingConfirm = true;
+        H.postDelayed(() -> { if (pendingConfirm) { pendingConfirm = false; startConfirmListen(); } }, 4000);
     }
 
     void startConfirmListen() {
+        if (confirmOverlay == null) return;
         stopConfirmListen();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) return;
         cSr = SpeechRecognizer.createSpeechRecognizer(this);
@@ -637,7 +838,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             public void onRmsChanged(float v) {}
             public void onBufferReceived(byte[] b) {}
             public void onEndOfSpeech() {}
-            public void onError(int e) {}
+            public void onError(int e) { H.postDelayed(() -> { if (confirmOverlay != null) startConfirmListen(); }, 400); }
             public void onResults(Bundle r) {
                 ArrayList<String> a = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 String t = (a != null && !a.isEmpty()) ? a.get(0).toLowerCase() : "";
@@ -645,7 +846,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     if (confirmOverlay == null) return;
                     if (t.contains("нет") || t.contains("отмен") || t.contains("не надо")) { removeConfirm(); say("Отменил."); }
                     else if (t.contains("да") || t.contains("звони") || t.contains("конечно") || t.contains("ага")) { String n = pendingNum, l = pendingLabel; removeConfirm(); callNumber(n, l); }
-                    else { say("Скажите да или нет."); startConfirmListen(); }
+                    else { say("Скажите да или нет."); H.postDelayed(() -> { if (confirmOverlay != null) startConfirmListen(); }, 1500); }
                 });
             }
             public void onPartialResults(Bundle r) {}
@@ -667,8 +868,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         LinearLayout c = col();
         LinearLayout tab = row();
         final boolean[] hist = {false};
-        Button tb1 = big("☎ НАБОР", "#D94F1E", "#FFFFFF", v -> { hist[0] = false; renderDialBody(c, hist); });
-        Button tb2 = big("🕐 ИСТОРИЯ", "#F9ECCA", "#7A4A21", v -> { hist[0] = true; renderDialBody(c, hist); });
+        Button tb1 = big("☎ НАБОР", ACC, "#FFFFFF", v -> { hist[0] = false; renderDialBody(c, hist); });
+        Button tb2 = big("🕐 ИСТОРИЯ", TILE, TFG, v -> { hist[0] = true; renderDialBody(c, hist); });
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         tp.setMargins(dp(3), 0, dp(3), 0);
         tb1.setLayoutParams(tp); tb2.setLayoutParams(tp);
@@ -681,7 +882,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void renderDialBody(LinearLayout c, boolean[] hist) {
         for (int i = c.getChildCount() - 1; i >= 1; i--) c.removeViewAt(i);
         if (hist[0]) {
-            c.addView(tv("ИСТОРИЯ ЗВОНКОВ", 22, "#54300F", true));
+            c.addView(tv("ИСТОРИЯ ЗВОНКОВ", 22, DARK, true));
             try {
                 Cursor cur = getContentResolver().query(CallLog.Calls.CONTENT_URI,
                         new String[]{CallLog.Calls.NUMBER, CallLog.Calls.DATE, CallLog.Calls.TYPE},
@@ -690,12 +891,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     while (cur.moveToNext()) {
                         String num = cur.getString(0); long date = cur.getLong(1); int type = cur.getInt(2);
                         String arrow = type == CallLog.Calls.OUTGOING_TYPE ? "→" : type == CallLog.Calls.MISSED_TYPE ? "✗" : "←";
-                        String color = type == CallLog.Calls.MISSED_TYPE ? "#C0392B" : "#7A4A21";
+                        String color = type == CallLog.Calls.MISSED_TYPE ? "#C0392B" : TFG;
                         String name = nameForNumber(num);
                         Calendar cd = Calendar.getInstance(); cd.setTimeInMillis(date);
                         String when = String.format(Locale.getDefault(), "%02d:%02d %02d.%02d", cd.get(Calendar.HOUR_OF_DAY), cd.get(Calendar.MINUTE), cd.get(Calendar.DAY_OF_MONTH), cd.get(Calendar.MONTH) + 1);
                         final String fnum = num;
-                        Button b = big(arrow + " " + name + "\n" + when, "#F9ECCA", color, v -> confirmCall(name, fnum));
+                        Button b = big(arrow + " " + name + "\n" + when, TILE, color, v -> { blink(callTile, false); P.edit().putLong("lastMissed", System.currentTimeMillis()).apply(); confirmCall(name, fnum); });
                         b.setTextSize(15 * FS);
                         c.addView(b);
                     }
@@ -703,20 +904,23 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 }
             } catch (Exception e) { c.addView(tv("История недоступна", 16, "#C0392B", true)); }
         } else {
-            TextView disp = tv("", 34, "#4A2C17", true);
+            TextView disp = tv("", 34, DARK, true);
             disp.setGravity(Gravity.CENTER);
-            disp.setMinHeight(dp(60));
+            disp.setMinHeight(dp(70));
             c.addView(disp);
+            View spacer = new View(this);
+            spacer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+            c.addView(spacer);
             final StringBuilder cur = new StringBuilder();
             String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"};
             for (int r = 0; r < 4; r++) {
                 LinearLayout rw = row();
                 for (int k = 0; k < 3; k++) {
                     String key = keys[r * 3 + k];
-                    Button b = big(key, "#F9ECCA", "#7A4A21", v -> { cur.append(key); disp.setText(cur.toString()); });
-                    b.setTextSize(24 * FS);
+                    Button b = big(key, TILE, TFG, v -> { cur.append(key); disp.setText(cur.toString()); });
+                    b.setTextSize(26 * FS);
                     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-                    lp.setMargins(dp(4), 0, dp(4), 0);
+                    lp.setMargins(dp(4), dp(3), dp(4), dp(3));
                     b.setLayoutParams(lp);
                     rw.addView(b);
                 }
@@ -730,42 +934,15 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             rw.addView(del); rw.addView(call);
             c.addView(rw);
         }
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
-    }
-
-    void showHistory() {
-        LinearLayout c = col();
-        c.addView(tv("ИСТОРИЯ ЗВОНКОВ", 26, "#54300F", true));
-        try {
-            Cursor cur = getContentResolver().query(CallLog.Calls.CONTENT_URI,
-                    new String[]{CallLog.Calls.NUMBER, CallLog.Calls.DATE, CallLog.Calls.TYPE},
-                    null, null, CallLog.Calls.DATE + " DESC LIMIT 15");
-            if (cur != null) {
-                while (cur.moveToNext()) {
-                    String num = cur.getString(0); long date = cur.getLong(1); int type = cur.getInt(2);
-                    String arrow = type == CallLog.Calls.OUTGOING_TYPE ? "→" : type == CallLog.Calls.MISSED_TYPE ? "✗" : "←";
-                    String color = type == CallLog.Calls.MISSED_TYPE ? "#C0392B" : "#7A4A21";
-                    String name = nameForNumber(num);
-                    Calendar cd = Calendar.getInstance(); cd.setTimeInMillis(date);
-                    String when = String.format(Locale.getDefault(), "%02d:%02d %02d.%02d", cd.get(Calendar.HOUR_OF_DAY), cd.get(Calendar.MINUTE), cd.get(Calendar.DAY_OF_MONTH), cd.get(Calendar.MONTH) + 1);
-                    final String fnum = num;
-                    Button b = big(arrow + " " + name + "\n" + when, "#F9ECCA", color, v -> confirmCall(name, fnum));
-                    b.setTextSize(15 * FS);
-                    c.addView(b);
-                }
-                cur.close();
-            }
-        } catch (Exception e) { c.addView(tv("История недоступна", 16, "#C0392B", true)); }
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
-        setScreen(c);
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
     }
 
     String nameForNumber(String num) {
         if (num == null) return "?";
         String clean = num.replaceAll("[^0-9]", "");
         for (String[] cc : contacts()) {
-            String c = cc[1].replaceAll("[^0-9]", "");
-            if (clean.length() >= 7 && c.length() >= 7 && clean.endsWith(c.substring(c.length() - 7))) return cc[0];
+            String ccn = cc[1].replaceAll("[^0-9]", "");
+            if (clean.length() >= 7 && ccn.length() >= 7 && clean.endsWith(ccn.substring(ccn.length() - 7))) return cc[0];
         }
         return num;
     }
@@ -773,7 +950,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     // ---------- СМС ----------
     void showSmsList() {
         LinearLayout c = col();
-        c.addView(tv("ВХОДЯЩИЕ СООБЩЕНИЯ", 26, "#54300F", true));
+        c.addView(tv("ВХОДЯЩИЕ СООБЩЕНИЯ", 26, DARK, true));
         c.addView(big("✍️ НАПИСАТЬ НОВОЕ", "#3FAE4C", "#FFFFFF", v -> showContacts(false)));
         try {
             Cursor cur = getContentResolver().query(Uri.parse("content://sms/inbox"), null, null, null, "date DESC LIMIT 10");
@@ -782,136 +959,298 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     String addr = cur.getString(cur.getColumnIndexOrThrow("address"));
                     String body = cur.getString(cur.getColumnIndexOrThrow("body"));
                     String shortB = body.length() > 60 ? body.substring(0, 60) + "…" : body;
-                    Button b = big("От: " + nameForNumber(addr) + "\n" + shortB, "#F9ECCA", "#7A4A21", v -> say("Сообщение от " + nameForNumber(addr) + ": " + body));
+                    Button b = big("От: " + nameForNumber(addr) + "\n" + shortB, TILE, TFG, v -> say("Сообщение от " + nameForNumber(addr) + ": " + body));
                     b.setTextSize(15 * FS);
                     c.addView(b);
                 }
                 cur.close();
             }
         } catch (Exception e) { c.addView(tv("СМС недоступны", 16, "#C0392B", true)); }
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
     }
 
     void showCompose(int i) {
         List<String[]> cs = contacts();
+        stopCompListen();
         LinearLayout c = col();
-        c.addView(tv("ПИШЕМ: " + cs.get(i)[0], 24, "#54300F", true));
-        EditText et = new EditText(this);
-        et.setTextSize(20 * FS); et.setMinLines(3);
-        et.setHint("Скажите текст или напишите здесь");
-        c.addView(et);
-        c.addView(big("🔊 ПРОЧИТАТЬ ВСЛУХ", "#F9ECCA", "#7A4A21", v -> speak(et.getText().toString())));
+        c.addView(tv("ПИШЕМ: " + cs.get(i)[0], 24, DARK, true));
+        composeEt = new EditText(this);
+        composeEt.setTextSize(20 * FS); composeEt.setMinLines(3);
+        composeEt.setHint("Говорите текст — я запишу сам");
+        c.addView(composeEt);
+        c.addView(tv("(внучок слушает и дописывает за вами)", 14, MUT, false));
+        c.addView(big("🔊 ПРОЧИТАТЬ ВСЛУХ", TILE, TFG, v -> speak(composeEt.getText().toString())));
         c.addView(big("✅ ОТПРАВИТЬ", "#3FAE4C", "#FFFFFF", v -> {
-            sendSms(cs.get(i)[1], et.getText().toString());
+            stopCompListen();
+            sendSms(cs.get(i)[1], composeEt.getText().toString());
             say("Отправлено: " + cs.get(i)[0]);
             showMain();
         }));
-        c.addView(big("ОТМЕНА", "#F9ECCA", "#7A4A21", v -> showMain()));
+        c.addView(big("ОТМЕНА", TILE, TFG, v -> { stopCompListen(); showMain(); }));
         setScreen(c);
-        say("Кому пишем: " + cs.get(i)[0] + ". Говорите текст.");
+        say("Кому пишем: " + cs.get(i)[0] + ". Говорите текст, я запишу.");
+        startCompListen();
+    }
+
+    void startCompListen() {
+        stopCompListen();
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) return;
+        compListen = true;
+        compSr = SpeechRecognizer.createSpeechRecognizer(this);
+        Intent it = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        it.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        it.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU");
+        it.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        compSr.setRecognitionListener(new android.speech.RecognitionListener() {
+            public void onReadyForSpeech(Bundle p) {}
+            public void onBeginningOfSpeech() {}
+            public void onRmsChanged(float v) {}
+            public void onBufferReceived(byte[] b) {}
+            public void onEndOfSpeech() {}
+            public void onError(int e) { H.postDelayed(() -> { if (compListen) startCompListen(); }, 400); }
+            public void onResults(Bundle r) {
+                ArrayList<String> a = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                final String t = (a != null && !a.isEmpty()) ? a.get(0) : "";
+                H.post(() -> {
+                    if (!compListen || composeEt == null) return;
+                    String old = composeEt.getText().toString();
+                    composeEt.setText(old.isEmpty() ? t : old + " " + t);
+                    composeEt.setSelection(composeEt.getText().length());
+                    H.postDelayed(() -> { if (compListen) startCompListen(); }, 300);
+                });
+            }
+            public void onPartialResults(Bundle r) {}
+            public void onEvent(int i, Bundle b) {}
+        });
+        try { compSr.startListening(it); } catch (Exception e) {}
     }
 
     void sendSms(String num, String text) {
         try { SmsManager.getDefault().sendTextMessage(num, null, text, null, null); } catch (Exception e) { say("СМС не ушло."); }
     }
 
-    // ---------- НАПОМИНАНИЯ И БУДИЛЬНИК ----------
+    // ---------- НАПОМИНАНИЯ ----------
     List<String[]> rems() {
         List<String[]> out = new ArrayList<>();
         String raw = P.getString("rems", "");
         if (raw.isEmpty()) return out;
         for (String line : raw.split("\n")) {
             String[] p = line.split("\\|");
-            if (p.length == 2) out.add(p);
+            if (p.length >= 2) out.add(p);
         }
         return out;
     }
 
     void saveRems(List<String[]> r) {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < r.size(); i++) { if (i > 0) sb.append("\n"); sb.append(r.get(i)[0]).append("|").append(r.get(i)[1]); }
+        for (int i = 0; i < r.size(); i++) { if (i > 0) sb.append("\n"); sb.append(String.join("|", r.get(i))); }
         P.edit().putString("rems", sb.toString()).apply();
     }
 
     int addReminder(long millis, String text) {
         AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
-        Intent in = new Intent(this, ReminderReceiver.class).putExtra("text", text).putExtra("time", millis);
+        Intent in = new Intent(this, ReminderReceiver.class).putExtra("text", text);
         int code = (int) (millis % 1000000);
         PendingIntent pi = PendingIntent.getBroadcast(this, code, in, PendingIntent.FLAG_IMMUTABLE);
         if (android.os.Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi);
         else am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi);
         List<String[]> r = rems();
-        r.add(new String[]{String.valueOf(millis), text, String.valueOf(code)});
+        r.add(new String[]{String.valueOf(millis), text, String.valueOf(code), "rem"});
         saveRems(r);
         return code;
     }
 
-    void showRemList(LinearLayout c) {
+    void showRemList(LinearLayout c, String kind) {
         List<String[]> r = rems();
         long now = System.currentTimeMillis();
+        boolean any = false;
         for (int i = r.size() - 1; i >= 0; i--) {
+            String k = r.get(i).length > 3 ? r.get(i)[3] : "rem";
+            if (!k.equals(kind)) continue;
             long ms = Long.parseLong(r.get(i)[0]);
             if (ms <= now) continue;
+            any = true;
             Calendar cd = Calendar.getInstance(); cd.setTimeInMillis(ms);
             String when = String.format(Locale.getDefault(), "%02d:%02d %02d.%02d", cd.get(Calendar.HOUR_OF_DAY), cd.get(Calendar.MINUTE), cd.get(Calendar.DAY_OF_MONTH), cd.get(Calendar.MONTH) + 1);
             final int idx = i;
             final int code = r.get(i).length > 2 ? Integer.parseInt(r.get(i)[2]) : 0;
             LinearLayout rw = row();
-            Button b = big(when + "\n" + r.get(i)[1], "#F9ECCA", "#7A4A21", v -> say("Напоминание: " + r.get(idx)[1] + " в " + when));
+            Button b = big(when + "\n" + r.get(i)[1], TILE, TFG, v -> say("Напоминание: " + r.get(idx)[1] + " в " + when));
             b.setTextSize(14 * FS);
             b.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             rw.addView(b);
             Button db = big("✕", "#C0392B", "#FFFFFF", v -> {
                 AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
-                Intent in = new Intent(this, ReminderReceiver.class);
-                PendingIntent pi = PendingIntent.getBroadcast(this, code, in, PendingIntent.FLAG_IMMUTABLE);
+                PendingIntent pi = PendingIntent.getBroadcast(this, code, new Intent(this, ReminderReceiver.class), PendingIntent.FLAG_IMMUTABLE);
                 am.cancel(pi);
-                List<String[]> x = rems(); x.remove(idx); saveRems(x); say("Убрал напоминание."); showReminders();
+                List<String[]> x = rems(); x.remove(idx); saveRems(x); say("Убрал."); showReminders();
             });
             db.setLayoutParams(new LinearLayout.LayoutParams(dp(70), ViewGroup.LayoutParams.WRAP_CONTENT));
             rw.addView(db);
             c.addView(rw);
         }
+        if (!any) c.addView(tv("(пока ничего нет)", 15, MUT, false));
     }
 
     void showReminders() {
         LinearLayout c = col();
-        c.addView(tv("📝 НАПОМИНАНИЯ", 26, "#54300F", true));
-        c.addView(big("💊 Через час: таблетки", "#F9ECCA", "#7A4A21", v -> { addReminder(System.currentTimeMillis() + 3600000, "Пора принять таблетки!"); say("Напомню через час."); showReminders(); }));
-        c.addView(big("💊 Утром в 9:00: таблетки", "#F9ECCA", "#7A4A21", v -> { addReminder(atTime(9, 0), "Пора принять таблетки!"); say("Напомню утром в девять."); showReminders(); }));
-        c.addView(big("💊 Вечером в 21:00: таблетки", "#F9ECCA", "#7A4A21", v -> { addReminder(atTime(21, 0), "Пора принять таблетки!"); say("Напомню вечером в девять."); showReminders(); }));
-        c.addView(tv("Уже стоит:", 16, "#8A6A3A", true));
-        showRemList(c);
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(tv("📝 НАПОМИНАНИЯ", 26, DARK, true));
+        c.addView(big("➕ СОЗДАТЬ НАПОМИНАНИЕ", "#3FAE4C", "#FFFFFF", v -> { selDate = Calendar.getInstance(); showRemEditor(); }));
+        c.addView(big("💊 Через час: таблетки", TILE, TFG, v -> { addReminder(System.currentTimeMillis() + 3600000, "Пора принять таблетки!"); say("Напомню через час."); showReminders(); }));
+        c.addView(big("💊 Утром в 9:00: таблетки", TILE, TFG, v -> { addReminder(atTime(9, 0), "Пора принять таблетки!"); say("Напомню утром в девять."); showReminders(); }));
+        c.addView(tv("Уже стоит:", 16, MUT, true));
+        showRemList(c, "rem");
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
     }
 
-    void showAlarms() {
+    void showRemEditor() {
+        final Calendar time = Calendar.getInstance();
         LinearLayout c = col();
-        c.addView(tv("⏰ БУДИЛЬНИК", 26, "#54300F", true));
-        NumberPicker nh = new NumberPicker(this); nh.setMinValue(0); nh.setMaxValue(23); nh.setValue(7);
-        NumberPicker nm = new NumberPicker(this); nm.setMinValue(0); nm.setMaxValue(55); nm.setValue(0); nm.setWrapSelectorWheel(true);
+        c.addView(tv("НОВОЕ НАПОМИНАНИЕ", 24, DARK, true));
+        final EditText en = new EditText(this); en.setTextSize(20 * FS); en.setHint("Название (например: таблетки)");
+        c.addView(en);
+        final NumberPicker nh = new NumberPicker(this); nh.setMinValue(0); nh.setMaxValue(23); nh.setValue(9);
+        final NumberPicker nm = new NumberPicker(this); nm.setMinValue(0); nm.setMaxValue(55); nm.setValue(0);
         String[] mins = new String[60];
         for (int i = 0; i < 60; i += 5) mins[i] = String.format("%02d", i);
         for (int i = 0; i < 60; i++) if (mins[i] == null) mins[i] = "";
         nm.setDisplayedValues(mins);
         LinearLayout rw = row();
         rw.setGravity(Gravity.CENTER);
-        nh.setLayoutParams(new LinearLayout.LayoutParams(dp(110), dp(160)));
-        nm.setLayoutParams(new LinearLayout.LayoutParams(dp(110), dp(160)));
+        nh.setLayoutParams(new LinearLayout.LayoutParams(dp(100), dp(150)));
+        nm.setLayoutParams(new LinearLayout.LayoutParams(dp(100), dp(150)));
         rw.addView(nh); rw.addView(nm);
         c.addView(rw);
+        final Button dateB = big("📅 Дата: " + selDate.get(Calendar.DAY_OF_MONTH) + "." + (selDate.get(Calendar.MONTH) + 1) + "." + selDate.get(Calendar.YEAR), TILE, TFG, v -> showCalendar(true));
+        c.addView(dateB);
+        c.addView(big("💾 СОХРАНИТЬ", "#3FAE4C", "#FFFFFF", v -> {
+            String name = en.getText().toString().trim();
+            if (name.isEmpty()) name = "Напоминание";
+            Calendar cc = (Calendar) selDate.clone();
+            cc.set(Calendar.HOUR_OF_DAY, nh.getValue());
+            cc.set(Calendar.MINUTE, nm.getValue() * 5);
+            cc.set(Calendar.SECOND, 0);
+            if (cc.before(Calendar.getInstance())) cc.add(Calendar.DAY_OF_YEAR, 1);
+            addReminder(cc.getTimeInMillis(), name);
+            say("Напоминание создано.");
+            showReminders();
+        }));
+        c.addView(big("ОТМЕНА", TILE, TFG, v -> showReminders()));
+        setScreen(c);
+    }
+
+    // ---------- БУДИЛЬНИК ----------
+    int alarmMask = 0;
+
+    long nextAlarm(int h, int m, int mask) {
+        Calendar now = Calendar.getInstance();
+        for (int d = 0; d < 8; d++) {
+            Calendar c = (Calendar) now.clone();
+            c.add(Calendar.DAY_OF_YEAR, d);
+            c.set(Calendar.HOUR_OF_DAY, h); c.set(Calendar.MINUTE, m); c.set(Calendar.SECOND, 0);
+            if (c.before(now)) continue;
+            int wd = (c.get(Calendar.DAY_OF_WEEK) + 5) % 7;
+            if (mask == 0 || (mask & (1 << wd)) != 0) return c.getTimeInMillis();
+        }
+        return 0;
+    }
+
+    String until(long ms) {
+        long diff = ms - System.currentTimeMillis();
+        if (diff < 0) return "";
+        long h = diff / 3600000, m = (diff % 3600000) / 60000;
+        if (h > 0) return "сработает через " + h + " ч " + m + " мин";
+        return "сработает через " + m + " мин";
+    }
+
+    int addAlarm(int h, int m, int mask, String text) {
+        long ms = nextAlarm(h, m, mask);
+        if (ms == 0) return 0;
+        AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+        Intent in = new Intent(this, ReminderReceiver.class).putExtra("text", text).putExtra("ah", h).putExtra("am", m).putExtra("mask", mask);
+        int code = (int) (ms % 1000000);
+        PendingIntent pi = PendingIntent.getBroadcast(this, code, in, PendingIntent.FLAG_IMMUTABLE);
+        if (android.os.Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi);
+        else am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi);
+        List<String[]> r = rems();
+        r.add(new String[]{String.valueOf(ms), text, String.valueOf(code), "alm", h + ":" + m + ":" + mask});
+        saveRems(r);
+        return code;
+    }
+
+    void showAlarms() {
+        LinearLayout c = col();
+        c.addView(tv("⏰ БУДИЛЬНИК", 26, DARK, true));
+        final NumberPicker nh = new NumberPicker(this); nh.setMinValue(0); nh.setMaxValue(23); nh.setValue(7);
+        final NumberPicker nm = new NumberPicker(this); nm.setMinValue(0); nm.setMaxValue(55); nm.setValue(0);
+        String[] mins = new String[60];
+        for (int i = 0; i < 60; i += 5) mins[i] = String.format("%02d", i);
+        for (int i = 0; i < 60; i++) if (mins[i] == null) mins[i] = "";
+        nm.setDisplayedValues(mins);
+        LinearLayout rw = row();
+        rw.setGravity(Gravity.CENTER);
+        nh.setLayoutParams(new LinearLayout.LayoutParams(dp(100), dp(150)));
+        nm.setLayoutParams(new LinearLayout.LayoutParams(dp(100), dp(150)));
+        rw.addView(nh); rw.addView(nm);
+        c.addView(rw);
+        c.addView(tv("Дни недели:", 16, DARK, true));
+        final LinearLayout days = row();
+        final Button[] dbs = new Button[7];
+        for (int i = 0; i < 7; i++) {
+            final int bit = i;
+            dbs[i] = big(DN[i], TILE, TFG, v -> {
+                alarmMask ^= (1 << bit);
+                v.setBackgroundColor(Color.parseColor((alarmMask & (1 << bit)) != 0 ? "#3FAE4C" : Color.parseColor(TILE)));
+            });
+            dbs[i].setTextSize(13 * FS);
+            dbs[i].setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            days.addView(dbs[i]);
+        }
+        c.addView(days);
+        c.addView(tv("(ничего не нажато = каждый день)", 13, MUT, false));
         c.addView(big("✅ ПОСТАВИТЬ БУДИЛЬНИК", "#3FAE4C", "#FFFFFF", v -> {
             int m = nm.getValue() * 5;
-            addReminder(atTime(nh.getValue(), m), "Будильник! Пора вставать!");
-            say("Будильник поставлен на " + nh.getValue() + " " + String.format("%02d", m) + ".");
+            long ms = nextAlarm(nh.getValue(), m, alarmMask);
+            addAlarm(nh.getValue(), m, alarmMask, "Будильник! Пора вставать!");
+            say("Будильник поставлен. " + until(ms));
             showAlarms();
         }));
-        c.addView(tv("Уже стоит:", 16, "#8A6A3A", true));
-        showRemList(c);
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(tv("Уже стоит:", 16, MUT, true));
+        List<String[]> r = rems();
+        boolean any = false;
+        for (int i = r.size() - 1; i >= 0; i--) {
+            if (r.get(i).length < 4 || !r.get(i)[3].equals("alm")) continue;
+            any = true;
+            long ms = Long.parseLong(r.get(i)[0]);
+            String[] p = r.get(i)[4].split(":");
+            String dstr = p.length > 2 && !p[2].equals("0") ? daysStr(Integer.parseInt(p[2])) : "каждый день";
+            final int idx = i;
+            final int code = Integer.parseInt(r.get(i)[2]);
+            LinearLayout rw2 = row();
+            Button b = big(p[0] + ":" + p[1] + " • " + dstr + "\n" + until(ms), TILE, TFG, v -> say("Будильник в " + p[0] + ":" + p[1] + ", " + dstr + ". " + until(ms)));
+            b.setTextSize(14 * FS);
+            b.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            rw2.addView(b);
+            Button db = big("✕", "#C0392B", "#FFFFFF", v -> {
+                AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+                am.cancel(PendingIntent.getBroadcast(this, code, new Intent(this, ReminderReceiver.class), PendingIntent.FLAG_IMMUTABLE));
+                List<String[]> x = rems(); x.remove(idx); saveRems(x); say("Выключил будильник."); showAlarms();
+            });
+            db.setLayoutParams(new LinearLayout.LayoutParams(dp(70), ViewGroup.LayoutParams.WRAP_CONTENT));
+            rw2.addView(db);
+            c.addView(rw2);
+        }
+        if (!any) c.addView(tv("(пока ничего нет)", 15, MUT, false));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
+    }
+
+    String daysStr(int mask) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 7; i++) if ((mask & (1 << i)) != 0) sb.append(DN[i]).append(" ");
+        return sb.toString().trim();
     }
 
     long atTime(int h, int m) {
@@ -935,6 +1274,25 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     public static class ReminderReceiver extends BroadcastReceiver {
         @Override public void onReceive(Context c, Intent i) {
+            if (i.hasExtra("ah")) {
+                int h = i.getIntExtra("ah", 7), m = i.getIntExtra("am", 0), mask = i.getIntExtra("mask", 0);
+                Calendar now = Calendar.getInstance();
+                for (int d = 0; d < 8; d++) {
+                    Calendar cc = (Calendar) now.clone();
+                    cc.add(Calendar.DAY_OF_YEAR, d);
+                    cc.set(Calendar.HOUR_OF_DAY, h); cc.set(Calendar.MINUTE, m); cc.set(Calendar.SECOND, 0);
+                    if (cc.before(now)) continue;
+                    int wd = (cc.get(Calendar.DAY_OF_WEEK) + 5) % 7;
+                    if (mask == 0 || (mask & (1 << wd)) != 0) {
+                        AlarmManager am = (AlarmManager) c.getSystemService(ALARM_SERVICE);
+                        Intent ni = new Intent(c, ReminderReceiver.class).putExtra("text", i.getStringExtra("text")).putExtra("ah", h).putExtra("am", m).putExtra("mask", mask);
+                        int code = (int) (cc.getTimeInMillis() % 1000000);
+                        PendingIntent pi = PendingIntent.getBroadcast(c, code, ni, PendingIntent.FLAG_IMMUTABLE);
+                        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cc.getTimeInMillis(), pi);
+                        break;
+                    }
+                }
+            }
             Intent in = new Intent(c, MainActivity.class);
             in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             in.putExtra("reminder", i.getStringExtra("text"));
@@ -947,14 +1305,14 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         remOverlay = new LinearLayout(this);
         remOverlay.setOrientation(LinearLayout.VERTICAL);
         remOverlay.setGravity(Gravity.CENTER);
-        remOverlay.setBackgroundColor(Color.parseColor("#F4E3BD"));
+        remOverlay.setBackgroundColor(Color.parseColor(BG));
         remOverlay.setPadding(dp(30), dp(30), dp(30), dp(30));
         remOverlay.addView(tv("💊", 70, "#C0392B", false));
         TextView bt = tv(text.toUpperCase(), 36, "#C0392B", true);
         bt.setGravity(Gravity.CENTER);
         remOverlay.addView(bt);
         remOverlay.addView(big("✅ ПРИНЯЛ", "#3FAE4C", "#FFFFFF", v -> { frame.removeView(remOverlay); remOverlay = null; say("Молодец! Отметил."); }));
-        remOverlay.addView(big("⏰ НАПОМНИ ЧЕРЕЗ ЧАС", "#F9ECCA", "#7A4A21", v -> {
+        remOverlay.addView(big("⏰ НАПОМНИ ЧЕРЕЗ ЧАС", TILE, TFG, v -> {
             frame.removeView(remOverlay); remOverlay = null;
             addReminder(System.currentTimeMillis() + 3600000, text);
             say("Напомню ещё раз через час.");
@@ -970,11 +1328,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         c.addView(tv("ВЫЗЫВАЕМ ПОМОЩЬ!", 28, "#C0392B", true));
         TextView num = tv("5", 90, "#C0392B", true);
         c.addView(num);
-        c.addView(tv("Если случайно — жмите ОТМЕНА", 18, "#54300F", true));
-        c.addView(big("✋ ОТМЕНА", "#8A8A8A", "#FFFFFF", v -> { cancelSos(); }));
+        c.addView(tv("Если случайно — жмите ОТМЕНА", 18, DARK, true));
+        c.addView(big("✋ ОТМЕНА", "#8A8A8A", "#FFFFFF", v -> cancelSos()));
         setScreen(c);
         say("Внимание! Вызываю помощь через пять секунд. Если случайно — отмена.");
         final int[] n = {5};
+        sosActive = true;
         sosTicker = new Runnable() {
             public void run() {
                 if (!sosActive) return;
@@ -984,11 +1343,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 H.postDelayed(this, 1000);
             }
         };
-        sosActive = true;
         H.postDelayed(sosTicker, 1000);
     }
-
-    volatile boolean sosActive = false;
 
     void cancelSos() {
         sosActive = false;
@@ -1006,10 +1362,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         for (int i = 0; i < 3 && i < cs.size(); i++) sendSms(cs.get(i)[1], sms);
         callNumber("112", "служба спасения");
         LinearLayout c = col();
-        c.addView(tv("☎ ИДЁТ ЗВНОК В 112…", 26, "#C0392B", true));
-        c.addView(tv("СМС отправлено родным:", 18, "#54300F", true));
-        c.addView(tv(sms, 16, "#54300F", true));
-        c.addView(big("⌂ НА ГЛАВНЫЙ", "#4A2C17", "#F3E2BA", v -> showMain()));
+        c.addView(tv("☎ ИДЁТ ЗВОНОК В 112…", 26, "#C0392B", true));
+        c.addView(tv("СМС отправлено родным:", 18, DARK, true));
+        c.addView(tv(sms, 16, DARK, true));
+        c.addView(big("⌂ НА ГЛАВНЫЙ", DARK, BG, v -> showMain()));
         setScreen(c);
         say("Вызываю сто двенадцать и отправляю сообщение родным!");
     }
@@ -1024,18 +1380,19 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         } catch (Exception e) { return "Спутники не ловятся, точное место неизвестно."; }
     }
 
-    // ---------- УСТАНОВЛЕННЫЕ ПРИЛОЖЕНИЯ ----------
-    List<String[]> installedApps() {
-        List<String[]> out = new ArrayList<>();
+    // ---------- ПРИЛОЖЕНИЯ ----------
+    List<Object[]> installedApps() {
+        List<Object[]> out = new ArrayList<>();
         String myPkg = getPackageName();
         List<ResolveInfo> apps = getPackageManager().queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0);
         for (ResolveInfo ri : apps) {
             if (ri.activityInfo.packageName.equals(myPkg)) continue;
             String label = ri.loadLabel(getPackageManager()).toString();
-            if (label.length() > 18) label = label.substring(0, 16) + "…";
-            out.add(new String[]{label, ri.activityInfo.packageName});
+            if (label.length() > 14) label = label.substring(0, 12) + "…";
+            try { out.add(new Object[]{label, ri.loadIcon(getPackageManager()), ri.activityInfo.packageName}); }
+            catch (Exception e) { out.add(new Object[]{label, null, ri.activityInfo.packageName}); }
         }
-        Collections.sort(out, (a, b) -> a[0].compareToIgnoreCase(b[0]));
+        Collections.sort(out, (a, b) -> ((String) a[0]).compareToIgnoreCase((String) b[0]));
         if (out.size() > 24) out = out.subList(0, 24);
         return out;
     }
@@ -1043,8 +1400,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void openPackage(String pkg) {
         try {
             Intent li = getPackageManager().getLaunchIntentForPackage(pkg);
-            if (li != null) { startActivity(li); }
-            else { say("Не удалось открыть."); }
+            if (li != null) startActivity(li); else say("Не удалось открыть.");
         } catch (Exception e) { say("Не удалось открыть."); }
     }
 
@@ -1053,8 +1409,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         @Override public void onReceive(Context c, Intent i) {
             int level = i.getIntExtra("level", -1), scale = i.getIntExtra("scale", -1);
             int plugged = i.getIntExtra("plugged", 0);
+            if (level >= 0 && scale > 0) lastPct = level * 100 / scale;
+            refreshStatus();
             if (level < 0 || scale <= 0) return;
-            int pct = level * 100 / scale;
+            int pct = lastPct;
             if (plugged != 0) {
                 if (battOverlay != null) { frame.removeView(battOverlay); battOverlay = null; say("Зарядка началась. Спасибо!"); }
                 battWarned = false;
@@ -1129,8 +1487,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     @Override protected void onDestroy() {
         try { unregisterReceiver(battRec); } catch (Exception e) {}
-        stopListening(); stopConfirmListen();
+        try { unregisterReceiver(smsRec); } catch (Exception e) {}
+        stopListening(); stopConfirmListen(); stopCompListen();
         if (tts != null) tts.shutdown();
         super.onDestroy();
     }
-            }
+                     }

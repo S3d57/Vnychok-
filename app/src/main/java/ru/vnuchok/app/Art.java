@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
@@ -20,12 +19,12 @@ import android.view.View;
 /* =====================================================================
    Art.java — весь визуальный слой оболочки «ВНУЧОК» в стиле ретро-постера
    70-х: бумага с зерном, солнце над холмами, еловый лес, радужные полосы,
-   пилюли с двойным кольцом и единый набор векторных иконок v2.
-   Логика приложения сюда не заходит: только отрисовка.
+   пилюли с двойным кольцом, единый набор векторных иконок v2 и
+   «занавес» для анимации разблокировки. Логики приложения здесь нет.
    ===================================================================== */
 public class Art {
 
-    /* Цвета ретро-палитры, чтобы все экраны брали их из одного места */
+    /* Цвета ретро-палитры (не final: темы могут менять палитру на лету) */
     public static int RUST = 0xFFC05227;     // ржавый
     public static int ORANGE = 0xFFD9772F;   // оранжевый
     public static int MUSTARD = 0xFFD9A02B;  // горчичный
@@ -39,8 +38,8 @@ public class Art {
     public static int BROWN = 0xFF6B4A2F;    // коричневый
 
     /* -----------------------------------------------------------------
-       ИКОНКИ v2: единая сетка 100x100, скруглённые колпачки линий,
-       одинаковая оптическая толщина, заполненные акценты.
+       ИКОНКИ v2 (копии стиля референса): сетка 100x100, скруглённые
+       колпачки линий, одинаковая оптическая толщина, заполненные акценты.
        ----------------------------------------------------------------- */
     public static class Icon extends Drawable {
         private final String k;
@@ -96,30 +95,19 @@ public class Art {
                     c.drawPath(m, f);
                     c.drawCircle(70, 32, 7, f);
                     break; }
-                case "memo": { // лист с загнутым углом, строками и карандашом
-                    c.drawRoundRect(16, 8, 78, 92, 10, 10, s);
-                    Path fold = new Path(); fold.moveTo(78, 8); fold.lineTo(78, 26); fold.lineTo(60, 8); fold.close();
-                    c.drawPath(fold, f);
-                    c.drawLine(28, 36, 66, 36, s);
-                    c.drawLine(28, 52, 66, 52, s);
-                    c.drawLine(28, 68, 52, 68, s);
-                    c.save(); c.rotate(45, 76, 76);
-                    c.drawRoundRect(60, 70, 96, 82, 6, 6, f);
-                    Path tip = new Path(); tip.moveTo(60, 70); tip.lineTo(52, 76); tip.lineTo(60, 82); tip.close();
-                    c.drawPath(tip, f);
-                    c.restore();
+                case "memo": { // лист в рамке с тремя линиями (как «Заметки» в референсе)
+                    c.drawRoundRect(14, 10, 86, 90, 12, 12, s);
+                    c.drawLine(30, 34, 70, 34, s);
+                    c.drawLine(30, 50, 70, 50, s);
+                    c.drawLine(30, 66, 58, 66, s);
                     break; }
-                case "alarm": { // будильник: корпус, стрелки, chuông-кнопки, ножки
-                    c.drawCircle(30, 26, 9, f);
-                    c.drawCircle(70, 26, 9, f);
-                    c.drawCircle(50, 56, 26, s);
-                    c.drawLine(50, 56, 50, 40, s);
-                    c.drawLine(50, 56, 62, 60, s);
-                    c.drawCircle(50, 56, 4, f);
-                    c.drawLine(32, 78, 24, 90, s);
-                    c.drawLine(68, 78, 76, 90, s);
+                case "alarm": { // круглый циферблат со стрелками (как «Будильник» в референсе)
+                    c.drawCircle(50, 50, 30, s);
+                    c.drawLine(50, 50, 50, 32, s);
+                    c.drawLine(50, 50, 63, 55, s);
+                    c.drawCircle(50, 50, 4, f);
                     break; }
-                case "clock": { // часы без будильника
+                case "clock": { // часы для вкладки «История»
                     c.drawCircle(50, 50, 32, s);
                     c.drawLine(50, 50, 50, 30, s);
                     c.drawLine(50, 50, 64, 56, s);
@@ -169,12 +157,15 @@ public class Art {
                     c.drawLine(62, 24, 62, 86, s);
                     c.drawCircle(50, 46, 7, f);
                     break; }
-                case "music": { // двойная нота с перекладиной
-                    c.drawCircle(30, 76, 12, f);
-                    c.drawCircle(66, 70, 12, f);
-                    c.drawRect(40, 26, 46, 76, f);
-                    c.drawRect(76, 20, 82, 70, f);
-                    c.drawRoundRect(40, 14, 82, 28, 7, 7, f);
+                case "music": { // одна нота с флажком (как «Музыка» в референсе)
+                    c.drawCircle(38, 74, 14, f);
+                    c.drawRect(50, 22, 56, 74, f);
+                    Path flag = new Path();
+                    flag.moveTo(56, 22);
+                    flag.quadTo(80, 30, 72, 54);
+                    flag.quadTo(70, 38, 56, 34);
+                    flag.close();
+                    c.drawPath(flag, f);
                     break; }
                 case "weather": { // солнце за облаком
                     c.drawCircle(38, 34, 13, f);
@@ -257,7 +248,7 @@ public class Art {
                     bo.lineTo(38, 70); bo.lineTo(58, 46); bo.lineTo(47, 46); bo.close();
                     c.drawPath(bo, f);
                     break; }
-                case "sig": { // палки связи
+                case "sig": { // палки сотовой связи
                     for (int i = 0; i < 4; i++) {
                         float bh = 25 + i * 20;
                         boolean on = bars < 0 || i < bars;
@@ -283,7 +274,7 @@ public class Art {
                     c.drawLine(46, 34, 30, 50, s);
                     c.drawLine(46, 66, 30, 50, s);
                     break; }
-                case "book": { // раскрытая книга
+                case "book": { // раскрытая книга (как «Чтение» в референсе)
                     Path bl = new Path();
                     bl.moveTo(50, 22); bl.quadTo(30, 12, 12, 20); bl.lineTo(12, 78);
                     bl.quadTo(30, 70, 50, 80); bl.close();
@@ -324,10 +315,8 @@ public class Art {
                 p.setStyle(Paint.Style.FILL);
                 p.setColor(PAPER);
                 c.drawRect(b, p);
-                // зерно: тонкие горизонтальные линии
                 p.setColor(0x0D6B4A2F);
                 for (int y = b.top; y < b.bottom; y += 7) c.drawLine(b.left, y, b.right, y, p);
-                // виньетка по краям
                 p.setShader(new RadialGradient(b.centerX(), b.centerY(),
                         Math.max(b.width(), b.height()) * 0.75f,
                         new int[]{0x006B4A2F, 0x266B4A2F}, null, Shader.TileMode.CLAMP));
@@ -341,8 +330,7 @@ public class Art {
     }
 
     /* -----------------------------------------------------------------
-       ПИЛЮЛЯ С ДВОЙНЫМ КОЛЬЦОМ (как часы в референсе):
-       внешнее цветное кольцо, кремовое кольцо, тело
+       ПИЛЮЛЯ С ДВОЙНЫМ КОЛЬЦОМ (как часы в референсе)
        ----------------------------------------------------------------- */
     public static Drawable ringPill(Context ctx, int body, int outer) {
         float d = ctx.getResources().getDisplayMetrics().density;
@@ -363,7 +351,7 @@ public class Art {
         return ld;
     }
 
-    /* Обычная пилюля без колец (статус-бар, дата) */
+    /* Обычная пилюля без колец */
     public static Drawable pill(Context ctx, int body) {
         float d = ctx.getResources().getDisplayMetrics().density;
         GradientDrawable g = new GradientDrawable();
@@ -392,63 +380,97 @@ public class Art {
                 }
             }
         };
-        v.getLayoutParams();
         return v;
     }
 
     /* -----------------------------------------------------------------
-       СЦЕНА-ИЛЛЮСТРАЦИЯ шапки: солнце кольцами, три холма, еловый лес
+       СЦЕНА: солнце кольцами, три холма, еловый лес.
+       Один общий метод отрисовки — его используют и шапка, и занавес.
        ----------------------------------------------------------------- */
+    private static void drawScene(Canvas c, int w, int h, Paint p) {
+        // солнце: концентрические круги у левого края (видны дуги)
+        float cx = w * 0.16f, cy = h * 0.62f;
+        int[] cols = {RUST, ORANGE, MUSTARD, SAND};
+        float[] rr = {h * 0.58f, h * 0.46f, h * 0.34f, h * 0.22f};
+        for (int i = 0; i < 4; i++) { p.setColor(cols[i]); c.drawCircle(cx, cy, rr[i], p); }
+        // холмы тремя волнами
+        Path h1 = new Path();
+        h1.moveTo(0, h * 0.52f);
+        h1.quadTo(w * 0.22f, h * 0.34f, w * 0.48f, h * 0.50f);
+        h1.quadTo(w * 0.74f, h * 0.66f, w, h * 0.44f);
+        h1.lineTo(w, h); h1.lineTo(0, h); h1.close();
+        p.setColor(GREEN); c.drawPath(h1, p);
+        Path h2 = new Path();
+        h2.moveTo(0, h * 0.68f);
+        h2.quadTo(w * 0.3f, h * 0.54f, w * 0.6f, h * 0.68f);
+        h2.quadTo(w * 0.82f, h * 0.8f, w, h * 0.64f);
+        h2.lineTo(w, h); h2.lineTo(0, h); h2.close();
+        p.setColor(MOSS); c.drawPath(h2, p);
+        Path h3 = new Path();
+        h3.moveTo(0, h * 0.86f);
+        h3.quadTo(w * 0.4f, h * 0.74f, w * 0.75f, h * 0.87f);
+        h3.quadTo(w * 0.9f, h * 0.92f, w, h * 0.84f);
+        h3.lineTo(w, h); h3.lineTo(0, h); h3.close();
+        p.setColor(OLIVE); c.drawPath(h3, p);
+        // еловый лес на дальнем холме
+        float[] xs = {0.60f, 0.70f, 0.80f, 0.90f};
+        float[] ss = {0.8f, 1.0f, 0.9f, 0.7f};
+        for (int i = 0; i < 4; i++) tree(c, xs[i] * w, h * 0.50f, h * 0.22f * ss[i], p);
+    }
+
+    private static void tree(Canvas c, float x, float baseY, float size, Paint p) {
+        p.setColor(PINE);
+        for (int t = 0; t < 3; t++) {
+            float ty = baseY - size * 0.33f * t;
+            float tw = size * (0.42f - t * 0.10f);
+            Path tr = new Path();
+            tr.moveTo(x, ty - size * 0.42f);
+            tr.lineTo(x - tw, ty);
+            tr.lineTo(x + tw, ty);
+            tr.close();
+            c.drawPath(tr, p);
+        }
+        c.drawRect(x - size * 0.06f, baseY - size * 0.06f, x + size * 0.06f, baseY + size * 0.10f, p);
+    }
+
+    /* Статичная сцена заданной высоты (для шапки главного экрана) */
     public static View scene(Context ctx, int hPx) {
         View v = new View(ctx) {
             private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             { p.setStyle(Paint.Style.FILL); }
-            @Override protected void onDraw(Canvas c) {
-                int w = getWidth(), h = getHeight();
-                // солнце: концентрические круги у левого края (видны дуги)
-                float cx = w * 0.13f, cy = h * 0.98f;
-                int[] cols = {RUST, ORANGE, MUSTARD, SAND};
-                float[] rr = {h * 0.92f, h * 0.74f, h * 0.56f, h * 0.38f};
-                for (int i = 0; i < 4; i++) { p.setColor(cols[i]); c.drawCircle(cx, cy, rr[i], p); }
-                // холмы тремя волнами
-                Path h1 = new Path();
-                h1.moveTo(0, h * 0.60f);
-                h1.quadTo(w * 0.22f, h * 0.40f, w * 0.48f, h * 0.58f);
-                h1.quadTo(w * 0.74f, h * 0.76f, w, h * 0.52f);
-                h1.lineTo(w, h); h1.lineTo(0, h); h1.close();
-                p.setColor(GREEN); c.drawPath(h1, p);
-                Path h2 = new Path();
-                h2.moveTo(0, h * 0.78f);
-                h2.quadTo(w * 0.3f, h * 0.62f, w * 0.6f, h * 0.78f);
-                h2.quadTo(w * 0.82f, h * 0.9f, w, h * 0.74f);
-                h2.lineTo(w, h); h2.lineTo(0, h); h2.close();
-                p.setColor(MOSS); c.drawPath(h2, p);
-                Path h3 = new Path();
-                h3.moveTo(0, h * 0.94f);
-                h3.quadTo(w * 0.4f, h * 0.82f, w * 0.75f, h * 0.95f);
-                h3.quadTo(w * 0.9f, h * 0.99f, w, h * 0.92f);
-                h3.lineTo(w, h); h3.lineTo(0, h); h3.close();
-                p.setColor(OLIVE); c.drawPath(h3, p);
-                // еловый лес справа на первом холме
-                float[] xs = {0.62f, 0.72f, 0.82f, 0.92f};
-                float[] ss = {0.8f, 1.0f, 0.9f, 0.7f};
-                for (int i = 0; i < 4; i++) tree(c, xs[i] * w, h * 0.58f, h * 0.30f * ss[i]);
-            }
-            private void tree(Canvas c, float x, float baseY, float size) {
-                p.setColor(PINE);
-                for (int t = 0; t < 3; t++) {
-                    float ty = baseY - size * 0.33f * t;
-                    float tw = size * (0.42f - t * 0.10f);
-                    Path tr = new Path();
-                    tr.moveTo(x, ty - size * 0.42f);
-                    tr.lineTo(x - tw, ty);
-                    tr.lineTo(x + tw, ty);
-                    tr.close();
-                    c.drawPath(tr, p);
-                }
-                c.drawRect(x - size * 0.06f, baseY - size * 0.06f, x + size * 0.06f, baseY + size * 0.10f, p);
-            }
+            @Override protected void onDraw(Canvas c) { drawScene(c, getWidth(), getHeight(), p); }
         };
         return v;
     }
+
+    /* -----------------------------------------------------------------
+       ЗАНАВЕС: экран разблокировки — холмы с лесом на весь экран,
+       за 2 секунды разъезжаются в стороны и открывают главный экран.
+       ----------------------------------------------------------------- */
+    public static class CurtainView extends View {
+        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private float open = 0f;
+        public CurtainView(Context c) { super(c); p.setStyle(Paint.Style.FILL); }
+        public void start(final Runnable onDone) {
+            android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0f, 1f);
+            va.setDuration(2000);
+            va.addUpdateListener(a -> { open = (Float) a.getAnimatedValue(); invalidate(); });
+            va.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(android.animation.Animator a) { if (onDone != null) onDone.run(); }
+            });
+            va.start();
+        }
+        @Override protected void onDraw(Canvas c) {
+            int w = getWidth(), h = getHeight();
+            if (w == 0 || h == 0) return;
+            c.drawColor(PAPER); // занавес непрозрачный: бумага под сценой
+            int shift = (int) (open * w);
+            // левая половина уезжает влево
+            c.save(); c.clipRect(0, 0, w / 2, h); c.translate(-shift, 0); drawScene(c, w, h, p); c.restore();
+            // правая половина уезжает вправо
+            c.save(); c.clipRect(w / 2, 0, w, h); c.translate(shift, 0); drawScene(c, w, h, p); c.restore();
+        }
+    }
+
+    public static View curtain(Context c) { return new CurtainView(c); }
 }

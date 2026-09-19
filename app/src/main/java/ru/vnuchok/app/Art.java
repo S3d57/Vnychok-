@@ -26,17 +26,17 @@ import android.view.View;
 public class Art {
 
     /* Цвета ретро-палитры, чтобы все экраны брали их из одного места */
-    public static final int RUST = 0xFFC05227;     // ржавый
-    public static final int ORANGE = 0xFFD9772F;   // оранжевый
-    public static final int MUSTARD = 0xFFD9A02B;  // горчичный
-    public static final int SAND = 0xFFE8C15A;     // песочный
-    public static final int PINE = 0xFF2E4034;     // хвойный тёмный
-    public static final int GREEN = 0xFF3E5641;    // зелёный корпус
-    public static final int MOSS = 0xFF5A7A4F;     // мох
-    public static final int OLIVE = 0xFF7A9A5F;    // олива
-    public static final int CREAM = 0xFFF3ECD8;    // кремовый текст
-    public static final int PAPER = 0xFFEFE7D2;    // бумага
-    public static final int BROWN = 0xFF6B4A2F;    // коричневый
+    public static int RUST = 0xFFC05227;     // ржавый
+    public static int ORANGE = 0xFFD9772F;   // оранжевый
+    public static int MUSTARD = 0xFFD9A02B;  // горчичный
+    public static int SAND = 0xFFE8C15A;     // песочный
+    public static int PINE = 0xFF2E4034;     // хвойный тёмный
+    public static int GREEN = 0xFF3E5641;    // зелёный корпус
+    public static int MOSS = 0xFF5A7A4F;     // мох
+    public static int OLIVE = 0xFF7A9A5F;    // олива
+    public static int CREAM = 0xFFF3ECD8;    // кремовый текст
+    public static int PAPER = 0xFFEFE7D2;    // бумага
+    public static int BROWN = 0xFF6B4A2F;    // коричневый
 
     /* -----------------------------------------------------------------
        ИКОНКИ v2: единая сетка 100x100, скруглённые колпачки линий,

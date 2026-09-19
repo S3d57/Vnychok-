@@ -261,7 +261,7 @@ public class VnCalls {
             }), 8);
         } else {
             final android.widget.TextView disp = VnUi.tv("", 30, VnTheme.GREEN, true);
-            disp.setGravity(android.view.Gravity.CENTER););
+            disp.setGravity(android.view.Gravity.CENTER);
             disp.setMinHeight(VnUi.dp(60));
             c.addView(disp);
             final StringBuilder cur = new StringBuilder();

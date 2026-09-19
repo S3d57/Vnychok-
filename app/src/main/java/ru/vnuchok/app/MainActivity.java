@@ -304,7 +304,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         THolder th = holder(v);
         String bg = th.bg;
         if (bg != null) {
-            GradientDrawable base = gd(bg);
+            GradientDrawable base = new GradientDrawable(); base.setColor(Color.parseColor(bg)); base.setCornerRadius(dp(22));;
             final GradientDrawable ring = new GradientDrawable();
             ring.setColor(Color.TRANSPARENT);
             ring.setCornerRadius(dp(22));
@@ -321,7 +321,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             va.addUpdateListener(a -> ring.setAlpha((Integer) a.getAnimatedValue()));
             va.start();
             H.postDelayed(() -> {
-                v.setBackground(gd(th.bg));
+                GradientDrawable rb = new GradientDrawable(); rb.setColor(Color.parseColor(th.bg)); rb.setCornerRadius(dp(22)); v.setBackground(rb);
                 v.setElevation(dp(5));
             }, 500);
         }

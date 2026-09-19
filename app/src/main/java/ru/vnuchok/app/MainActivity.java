@@ -275,6 +275,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     static final String[] DN = {"ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"};
     static final String[] MN = {"ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ", "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ"};
     static final String[] THN = {"ХВОЯ", "КРЕМ", "НОЧЬ", "КАРАМЕЛЬ"};
+    static final String SOS_COL = "#C24B2A";
+    static final String GOLD = "#C9A227";
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -377,10 +379,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     void applyTheme(int t) {
         switch (t) {
-            case 1: BG = "#F6EEDC"; CARD = "#FFFBF0"; TILE = "#C46A2B"; TFG = "#FFF6E8"; ACC = "#B4531D"; DARK = "#4A2C17"; EDGE = "#8A5A2A"; MUT = "#8A7A5A"; SBBG = "#B4531D"; SBFG = "#FFF6E8"; tilePal = new String[]{"#C46A2B", "#8A5A2A", "#A0522D"}; break;
-            case 2: BG = "#14181F"; CARD = "#1E242E"; TILE = "#2A3240"; TFG = "#E8EEF6"; ACC = "#E8A33D"; DARK = "#F2F6FB"; EDGE = "#E8A33D"; MUT = "#8A97A8"; SBBG = "#1E242E"; SBFG = "#E8EEF6"; tilePal = new String[]{"#2A3240", "#33405A", "#24303E"}; break;
-            case 3: BG = "#F3E3C3"; CARD = "#FBF0DA"; TILE = "#7A4A21"; TFG = "#FBEFD8"; ACC = "#7A4A21"; DARK = "#3A2210"; EDGE = "#5A3418"; MUT = "#8A6A44"; SBBG = "#5A3418"; SBFG = "#FBEFD8"; tilePal = new String[]{"#7A4A21", "#96622E", "#5A3418"}; break;
-            default: BG = "#EDE7D6"; CARD = "#F7F2E4"; TILE = "#4F6141"; TFG = "#F3EEDC"; ACC = "#4F6141"; DARK = "#2E2417"; EDGE = "#6B3F23"; MUT = "#7C7057"; SBBG = "#3E4A34"; SBFG = "#F3EEDC"; tilePal = new String[]{"#4F6141", "#6B4F35", "#A0522D"}; break;
+            case 1: // крем / harvest gold
+                BG = "#F3E6C8"; CARD = "#FBF3DC"; TILE = "#C9A227"; TFG = "#1C140C"; ACC = "#C9A227"; DARK = "#3A2210"; EDGE = "#8A6A2A"; MUT = "#8A7450"; SBBG = "#6B4F22"; SBFG = "#FBF3DC";
+                tilePal = new String[]{"#C46A2B", "#7A4A21", "#C9A227"}; break;
+            case 2: // ночь / тёмное дерево
+                BG = "#1C140C"; CARD = "#2A1C12"; TILE = "#5A6B2F"; TFG = "#F3E6C8"; ACC = "#C9A227"; DARK = "#F3E6C8"; EDGE = "#C9A227"; MUT = "#A08A62"; SBBG = "#2A1C12"; SBFG = "#F3E6C8";
+                tilePal = new String[]{"#5A6B2F", "#7A4A21", "#C24B2A"}; break;
+            case 3: // карамель / terracotta
+                BG = "#F4E0C4"; CARD = "#FAEED6"; TILE = "#A0522D"; TFG = "#FFF6E8"; ACC = "#C24B2A"; DARK = "#3A2210"; EDGE = "#7A3A18"; MUT = "#8A6A44"; SBBG = "#7A3A18"; SBFG = "#FAEED6";
+                tilePal = new String[]{"#A0522D", "#C24B2A", "#7A4A21"}; break;
+            default: // хвоя / avocado 70s
+                BG = "#EFE4C8"; CARD = "#F7EFDA"; TILE = "#5A6B2F"; TFG = "#F7EFDA"; ACC = "#5A6B2F"; DARK = "#1C140C"; EDGE = "#4A2E1F"; MUT = "#7C7057"; SBBG = "#3E4A28"; SBFG = "#F7EFDA";
+                tilePal = new String[]{"#5A6B2F", "#4A2E1F", "#C24B2A"}; break;
         }
     }
 
@@ -400,8 +410,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     GradientDrawable gd(String bg) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(Color.parseColor(bg));
-        g.setCornerRadius(dp(16));
-        g.setStroke(dp(3), shade(Color.parseColor(bg), 0.55f));
+        g.setCornerRadius(dp(22));
+        g.setStroke(dp(4), shade(Color.parseColor(bg), 0.62f));
         return g;
     }
 
@@ -452,8 +462,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             GradientDrawable base = gd(bg);
             final GradientDrawable ring = new GradientDrawable();
             ring.setColor(Color.TRANSPARENT);
-            ring.setCornerRadius(dp(20));
-            ring.setStroke(dp(6), 0xFFFFC46B);
+            ring.setCornerRadius(dp(24));
+            ring.setStroke(dp(6), Color.parseColor(GOLD));
             LayerDrawable ld = new LayerDrawable(new Drawable[]{base, ring});
             v.setBackground(ld);
             if (Build.VERSION.SDK_INT >= 28) {
@@ -727,29 +737,30 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         top.addView(capBox);
 
         LinearLayout c = col();
-        int tileH = Math.round(dp(112) * FS);
-        int smallH = Math.round(dp(64) * FS);
+        int tileH = Math.round(dp(118) * FS);
+        int smallH = Math.round(dp(72) * FS);
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-        hp.setMargins(dp(3), dp(2), dp(3), dp(2));
+        hp.setMargins(dp(4), dp(3), dp(4), dp(3));
 
         callTile = tileBtn("phone", "ПОЗВОНИТЬ", tileColor(0), TFG, v -> showContacts(true));
-        msgTile = tileBtn("mail", "СООБЩЕНИЯ", tileColor(1), TFG, v -> { blink(msgTile, false); showSmsList(); });
-        Button t3 = tileBtn("dial", "НАБОР", tileColor(2), TFG, v -> showDial());
+        msgTile = tileBtn("mail", "НАПИСАТЬ", tileColor(1), TFG, v -> { blink(msgTile, false); showSmsList(); });
         LinearLayout r1 = row();
         r1.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tileH));
-        callTile.setLayoutParams(hp); msgTile.setLayoutParams(hp); t3.setLayoutParams(hp);
-        r1.addView(callTile); r1.addView(msgTile); r1.addView(t3);
+        callTile.setLayoutParams(hp); msgTile.setLayoutParams(hp);
+        callTile.setTextSize(16 * FS * SC);
+        msgTile.setTextSize(16 * FS * SC);
+        r1.addView(callTile); r1.addView(msgTile);
         c.addView(r1);
 
-        Button sos = bigI("sos", "SOS — ВЫЗВАТЬ ПОМОЩЬ (112)", "#C0392B", "#FFFFFF", v -> startSos());
-        sos.setTextSize(20 * FS * SC);
-        sos.setMinHeight(dp(80));
+        Button sos = bigI("sos", "SOS — ПОМОЩЬ 112", SOS_COL, "#FFFFFF", v -> startSos());
+        sos.setTextSize(22 * FS * SC);
+        sos.setMinHeight(dp(88));
         LinearLayout.LayoutParams sp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sp2.topMargin = dp(4); sp2.bottomMargin = dp(4);
+        sp2.topMargin = dp(6); sp2.bottomMargin = dp(6);
         sos.setLayoutParams(sp2);
         c.addView(sos);
 
-        Button t6 = tileBtn("memo", "НАПОМИНАНИЯ", tileColor(0), TFG, v -> showReminders());
+        Button t6 = tileBtn("memo", "ТАБЛЕТКИ", tileColor(0), TFG, v -> showReminders());
         Button t7 = tileBtn("alarm", "БУДИЛЬНИК", tileColor(1), TFG, v -> showAlarms());
         Button t8 = tileBtn("torch", "ФОНАРЬ", tileColor(2), TFG, v -> toggleTorch());
         LinearLayout r2 = row();
@@ -759,28 +770,26 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         c.addView(r2);
 
         LinearLayout.LayoutParams hpSmall = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-        hpSmall.setMargins(dp(3), dp(2), dp(3), dp(2));
+        hpSmall.setMargins(dp(4), dp(3), dp(4), dp(3));
         LinearLayout r3 = row();
         r3.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, smallH));
-        Button ex = tileBtn("wrench", "ПРОЧЕЕ", tileColor(0), TFG, v -> showExtra());
-        ex.setCompoundDrawables(null, ic("wrench", TFG, dp(24)), null, null);
-        ex.setTextSize(12 * FS * SC);
+        Button dial = tileBtn("dial", "НАБОР", tileColor(2), TFG, v -> showDial());
+        dial.setCompoundDrawables(null, ic("dial", TFG, dp(26)), null, null);
+        dial.setTextSize(13 * FS * SC);
+        dial.setLayoutParams(hpSmall);
+        Button ex = tileBtn("wrench", "ЕЩЁ", tileColor(0), TFG, v -> showExtra());
+        ex.setCompoundDrawables(null, ic("wrench", TFG, dp(26)), null, null);
+        ex.setTextSize(13 * FS * SC);
         ex.setLayoutParams(hpSmall);
-        r3.addView(ex);
+        r3.addView(dial); r3.addView(ex);
         if (P.getBoolean("showApps", true)) {
-            Button ap = tileBtn("folder", "ДОП. ПРОГРАММЫ", tileColor(1), TFG, v -> showAppsScreen());
-            ap.setCompoundDrawables(null, ic("folder", TFG, dp(24)), null, null);
-            ap.setTextSize(12 * FS * SC);
+            Button ap = tileBtn("folder", "ПРОГРАММЫ", tileColor(1), TFG, v -> showAppsScreen());
+            ap.setCompoundDrawables(null, ic("folder", TFG, dp(26)), null, null);
+            ap.setTextSize(13 * FS * SC);
             ap.setLayoutParams(hpSmall);
             r3.addView(ap);
         }
         c.addView(r3);
-
-        if (P.getBoolean("showApps", true)) {
-            Button fb = bigI("folder", "ДОПОЛНИТЕЛЬНЫЕ ПРОГРАММЫ", TILE, TFG, v -> showAppsScreen());
-            fb.setTextSize(16 * FS * SC);
-            c.addView(fb);
-        }
 
         setScreenHeader(c, true, top);
         pollSignal();
@@ -2089,4 +2098,4 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         if (tts != null) tts.shutdown();
         super.onDestroy();
     }
-                }
+                      }

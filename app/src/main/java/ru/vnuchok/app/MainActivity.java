@@ -82,34 +82,159 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             Rect b = getBounds();
             c.save(); c.translate(b.left, b.top);
             c.scale(b.width() / 100f, b.height() / 100f);
+            s.setStrokeWidth(8f);
             switch (k) {
-                case "phone": c.rotate(-45, 50, 50); c.drawRoundRect(15, 40, 85, 62, 11, 11, f); c.drawRoundRect(10, 26, 32, 62, 10, 10, f); c.drawRoundRect(68, 26, 90, 62, 10, 10, f); break;
-                case "mail": c.drawRoundRect(8, 22, 92, 78, 8, 8, s); c.drawLine(12, 28, 50, 56, s); c.drawLine(88, 28, 50, 56, s); break;
-                case "dial": for (int i = 0; i < 9; i++) c.drawCircle(25 + (i % 3) * 25, 25 + (i / 3) * 25, 9, f); break;
-                case "cam": c.drawRoundRect(6, 30, 94, 82, 10, 10, s); c.drawCircle(50, 56, 16, s); c.drawRoundRect(36, 16, 64, 32, 6, 6, f); break;
-                case "album": c.drawRoundRect(8, 14, 92, 86, 8, 8, s); Path pa = new Path(); pa.moveTo(20, 72); pa.lineTo(42, 42); pa.lineTo(58, 62); pa.lineTo(70, 48); pa.lineTo(82, 72); pa.close(); c.drawPath(pa, f); c.drawCircle(68, 32, 8, f); break;
-                case "memo": c.drawRoundRect(18, 8, 78, 92, 8, 8, s); c.drawLine(30, 30, 66, 30, s); c.drawLine(30, 46, 66, 46, s); c.drawLine(30, 62, 52, 62, s); c.save(); c.rotate(45, 72, 72); c.drawRoundRect(56, 66, 94, 78, 5, 5, f); c.restore(); break;
-                case "alarm": c.drawCircle(50, 60, 28, s); c.drawLine(50, 60, 50, 44, s); c.drawLine(50, 60, 62, 64, s); c.drawRoundRect(12, 12, 34, 26, 6, 6, f); c.drawRoundRect(66, 12, 88, 26, 6, 6, f); c.drawLine(28, 84, 20, 94, s); c.drawLine(72, 84, 80, 94, s); break;
-                case "clock": c.drawCircle(50, 50, 34, s); c.drawLine(50, 50, 50, 28, s); c.drawLine(50, 50, 66, 56, s); break;
-                case "torch": Path ph = new Path(); ph.moveTo(30, 18); ph.lineTo(70, 18); ph.lineTo(62, 42); ph.lineTo(38, 42); ph.close(); c.drawPath(ph, f); c.drawRoundRect(38, 42, 62, 90, 6, 6, f); c.drawLine(50, 4, 50, 12, s); c.drawLine(28, 8, 34, 14, s); c.drawLine(72, 8, 66, 14, s); break;
-                case "wrench": c.drawCircle(34, 34, 17, s); c.save(); c.rotate(45, 50, 50); c.drawRoundRect(42, 44, 92, 60, 8, 8, f); c.restore(); c.drawRoundRect(22, 28, 46, 40, 5, 5, f); break;
-                case "mic": c.drawRoundRect(38, 6, 62, 50, 12, 12, f); c.drawArc(26, 28, 74, 76, 0, 180, false, s); c.drawLine(50, 76, 50, 90, s); c.drawLine(34, 92, 66, 92, s); break;
-                case "sos": c.drawRect(40, 14, 60, 86, f); c.drawRect(14, 40, 86, 60, f); break;
-                case "radio": c.drawRoundRect(8, 36, 92, 84, 8, 8, s); c.drawCircle(32, 60, 12, s); c.drawLine(58, 50, 82, 50, s); c.drawLine(58, 64, 82, 64, s); c.drawLine(68, 36, 88, 12, s); break;
-                case "map": Path pm = new Path(); pm.moveTo(12, 26); pm.lineTo(38, 16); pm.lineTo(62, 26); pm.lineTo(88, 16); pm.lineTo(88, 74); pm.lineTo(62, 84); pm.lineTo(38, 74); pm.lineTo(12, 84); pm.close(); c.drawPath(pm, s); c.drawLine(38, 16, 38, 74, s); c.drawLine(62, 26, 62, 84, s); break;
-                case "music": c.drawCircle(32, 76, 14, f); c.drawRect(44, 20, 50, 76, f); c.drawRoundRect(44, 12, 80, 30, 8, 8, f); break;
-                case "weather": c.drawCircle(36, 36, 15, f); c.drawCircle(54, 62, 15, f); c.drawCircle(70, 66, 12, f); c.drawRoundRect(40, 62, 86, 78, 8, 8, f); break;
-                case "web": c.drawCircle(50, 50, 36, s); c.drawOval(new RectF(32, 14, 68, 86), s); c.drawLine(14, 50, 86, 50, s); c.drawLine(20, 30, 80, 30, s); c.drawLine(20, 70, 80, 70, s); break;
-                case "wifi": c.drawArc(20, 30, 80, 90, 200, 140, false, s); c.drawArc(30, 42, 70, 82, 200, 140, false, s); c.drawArc(40, 54, 60, 74, 200, 140, false, s); c.drawCircle(50, 78, 6, f); break;
-                case "folder": c.drawRoundRect(8, 30, 92, 82, 8, 8, f); c.drawRoundRect(8, 20, 44, 34, 6, 6, f); break;
-                case "sound": Path sp = new Path(); sp.moveTo(14, 40); sp.lineTo(34, 40); sp.lineTo(54, 22); sp.lineTo(54, 78); sp.lineTo(34, 60); sp.lineTo(14, 60); sp.close(); c.drawPath(sp, f); c.drawArc(58, 30, 88, 70, -40, 80, false, s); break;
-                case "silent": Path sq = new Path(); sq.moveTo(14, 40); sq.lineTo(34, 40); sq.lineTo(54, 22); sq.lineTo(54, 78); sq.lineTo(34, 60); sq.lineTo(14, 60); sq.close(); c.drawPath(sq, f); c.drawLine(66, 36, 90, 64, s); c.drawLine(90, 36, 66, 64, s); break;
-                case "gear": c.drawCircle(50, 50, 20, s); c.drawCircle(50, 50, 7, f); for (int i = 0; i < 8; i++) { c.save(); c.rotate(i * 45f, 50, 50); c.drawRoundRect(45, 12, 55, 26, 4, 4, f); c.restore(); } break;
-                case "batt": float lv = level < 0 ? 50 : level; s.setStrokeWidth(6); c.drawRoundRect(4, 26, 82, 74, 8, 8, s); c.drawRoundRect(85, 40, 96, 60, 3, 3, f); float fw = Math.max(5, 68 * lv / 100f); c.drawRoundRect(10, 32, 10 + fw, 68, 5, 5, f); break;
-                case "battc": s.setStrokeWidth(6); c.drawRoundRect(4, 26, 82, 74, 8, 8, s); c.drawRoundRect(85, 40, 96, 60, 3, 3, f); Path bo = new Path(); bo.moveTo(50, 30); bo.lineTo(34, 52); bo.lineTo(44, 52); bo.lineTo(38, 70); bo.lineTo(58, 46); bo.lineTo(47, 46); bo.close(); c.drawPath(bo, f); break;
-                case "sig": for (int i = 0; i < 4; i++) { float bh = 25 + i * 20; boolean on = bars < 0 || i < bars; c.drawRoundRect(10 + i * 24, 92 - bh, 26 + i * 24, 92, 4, 4, on ? f : s); } break;
-                case "home": Path hh = new Path(); hh.moveTo(50, 14); hh.lineTo(88, 48); hh.lineTo(76, 48); hh.lineTo(76, 86); hh.lineTo(24, 86); hh.lineTo(24, 48); hh.lineTo(12, 48); hh.close(); c.drawPath(hh, s); break;
-                case "people": c.drawCircle(35, 30, 14, f); c.drawRoundRect(15, 50, 55, 85, 12, 12, f); c.drawCircle(68, 36, 11, f); c.drawRoundRect(52, 54, 86, 85, 10, 10, f); break;
+                case "phone":
+                    s.setStrokeWidth(16f);
+                    c.drawArc(18, 22, 82, 86, 180, 180, false, s);
+                    c.drawCircle(18, 54, 12, f);
+                    c.drawCircle(82, 54, 12, f);
+                    break;
+                case "mail":
+                    c.drawRoundRect(8, 20, 92, 80, 12, 12, s);
+                    c.drawLine(14, 28, 50, 56, s);
+                    c.drawLine(86, 28, 50, 56, s);
+                    break;
+                case "dial":
+                    for (int i = 0; i < 9; i++) c.drawCircle(26 + (i % 3) * 24, 26 + (i / 3) * 24, 9, f);
+                    break;
+                case "cam":
+                    c.drawRoundRect(6, 28, 94, 82, 14, 14, s);
+                    c.drawCircle(50, 55, 15, s);
+                    c.drawCircle(50, 55, 5, f);
+                    c.drawRoundRect(36, 16, 60, 30, 6, 6, f);
+                    c.drawCircle(80, 40, 4, f);
+                    break;
+                case "album":
+                    c.drawRoundRect(8, 14, 92, 86, 12, 12, s);
+                    Path pa = new Path(); pa.moveTo(20, 74); pa.lineTo(40, 46); pa.lineTo(56, 64); pa.lineTo(68, 50); pa.lineTo(82, 74); pa.close(); c.drawPath(pa, f);
+                    c.drawCircle(68, 32, 8, f);
+                    break;
+                case "memo":
+                    c.drawRoundRect(16, 8, 76, 92, 10, 10, s);
+                    Path fold = new Path(); fold.moveTo(76, 8); fold.lineTo(76, 26); fold.lineTo(58, 8); fold.close(); c.drawPath(fold, f);
+                    c.drawLine(28, 34, 64, 34, s);
+                    c.drawLine(28, 50, 64, 50, s);
+                    c.drawLine(28, 66, 50, 66, s);
+                    c.save(); c.rotate(45, 74, 74); c.drawRoundRect(58, 68, 96, 80, 6, 6, f); Path tip = new Path(); tip.moveTo(58, 68); tip.lineTo(50, 74); tip.lineTo(58, 80); tip.close(); c.drawPath(tip, f); c.restore();
+                    break;
+                case "alarm":
+                    c.drawCircle(50, 58, 26, s);
+                    c.drawLine(50, 58, 50, 42, s);
+                    c.drawLine(50, 58, 62, 62, s);
+                    c.drawCircle(50, 58, 4, f);
+                    s.setStrokeWidth(9f);
+                    c.drawArc(14, 16, 40, 42, 180, 140, false, s);
+                    c.drawArc(60, 16, 86, 42, 320, 140, false, s);
+                    c.drawLine(30, 80, 22, 92, s);
+                    c.drawLine(70, 80, 78, 92, s);
+                    break;
+                case "clock":
+                    c.drawCircle(50, 50, 32, s);
+                    c.drawLine(50, 50, 50, 30, s);
+                    c.drawLine(50, 50, 64, 56, s);
+                    c.drawCircle(50, 50, 4, f);
+                    break;
+                case "torch":
+                    Path ph = new Path(); ph.moveTo(32, 20); ph.lineTo(68, 20); ph.lineTo(60, 44); ph.lineTo(40, 44); ph.close(); c.drawPath(ph, f);
+                    c.drawRoundRect(40, 44, 60, 90, 8, 8, f);
+                    c.drawLine(50, 4, 50, 12, s);
+                    c.drawLine(26, 8, 32, 14, s);
+                    c.drawLine(74, 8, 68, 14, s);
+                    c.drawLine(44, 56, 56, 56, s);
+                    break;
+                case "wrench":
+                    s.setStrokeWidth(11f);
+                    c.drawArc(16, 16, 48, 48, 60, 240, false, s);
+                    c.save(); c.rotate(45, 50, 50); c.drawRoundRect(40, 44, 92, 58, 7, 7, f); c.restore();
+                    c.drawCircle(82, 50, 5, f);
+                    break;
+                case "mic":
+                    c.drawRoundRect(38, 6, 62, 48, 12, 12, f);
+                    c.drawArc(26, 26, 74, 74, 0, 180, false, s);
+                    c.drawLine(50, 74, 50, 86, s);
+                    c.drawRoundRect(34, 86, 66, 94, 4, 4, f);
+                    break;
+                case "sos":
+                    c.drawRoundRect(40, 14, 60, 86, 8, 8, f);
+                    c.drawRoundRect(14, 40, 86, 60, 8, 8, f);
+                    break;
+                case "radio":
+                    c.drawRoundRect(8, 34, 92, 84, 12, 12, s);
+                    c.drawCircle(32, 59, 12, s);
+                    c.drawCircle(32, 59, 4, f);
+                    c.drawLine(56, 50, 82, 50, s);
+                    c.drawLine(56, 62, 82, 62, s);
+                    c.drawLine(56, 74, 74, 74, s);
+                    c.drawLine(66, 34, 88, 10, s);
+                    break;
+                case "map":
+                    Path pm = new Path(); pm.moveTo(12, 24); pm.lineTo(38, 14); pm.lineTo(62, 24); pm.lineTo(88, 14); pm.lineTo(88, 76); pm.lineTo(62, 86); pm.lineTo(38, 76); pm.lineTo(12, 86); pm.close(); c.drawPath(pm, s);
+                    c.drawLine(38, 14, 38, 76, s);
+                    c.drawLine(62, 24, 62, 86, s);
+                    c.drawCircle(50, 44, 7, f);
+                    break;
+                case "music":
+                    c.drawCircle(30, 76, 13, f);
+                    c.drawCircle(66, 70, 13, f);
+                    c.drawRect(41, 26, 47, 76, f);
+                    c.drawRect(77, 20, 83, 70, f);
+                    c.drawRoundRect(41, 14, 83, 30, 8, 8, f);
+                    break;
+                case "weather":
+                    c.drawCircle(36, 34, 14, f);
+                    for (int i = 0; i < 8; i++) { c.save(); c.rotate(i * 45f, 36, 34); c.drawLine(36, 12, 36, 6, s); c.restore(); }
+                    c.drawCircle(56, 62, 14, f);
+                    c.drawCircle(72, 66, 11, f);
+                    c.drawRoundRect(42, 62, 86, 77, 8, 8, f);
+                    break;
+                case "web":
+                    c.drawCircle(50, 50, 34, s);
+                    c.drawOval(new RectF(34, 16, 66, 84), s);
+                    c.drawLine(16, 50, 84, 50, s);
+                    c.drawArc(20, 26, 80, 74, 200, 140, false, s);
+                    c.drawArc(20, 26, 80, 74, 20, 140, false, s);
+                    break;
+                case "wifi":
+                    s.setStrokeWidth(9f);
+                    c.drawArc(14, 26, 86, 98, 210, 120, false, s);
+                    c.drawArc(28, 40, 72, 84, 210, 120, false, s);
+                    c.drawArc(40, 52, 60, 72, 210, 120, false, s);
+                    c.drawCircle(50, 76, 7, f);
+                    break;
+                case "folder":
+                    c.drawRoundRect(10, 24, 90, 82, 10, 10, f);
+                    c.drawRoundRect(10, 16, 44, 34, 8, 8, f);
+                    c.drawRoundRect(16, 44, 84, 76, 8, 8, s);
+                    break;
+                case "sound":
+                    Path sp = new Path(); sp.moveTo(14, 40); sp.lineTo(32, 40); sp.lineTo(52, 22); sp.lineTo(52, 78); sp.lineTo(32, 60); sp.lineTo(14, 60); sp.close(); c.drawPath(sp, f);
+                    c.drawArc(58, 32, 84, 68, -45, 90, false, s);
+                    c.drawArc(66, 24, 96, 76, -45, 90, false, s);
+                    break;
+                case "silent":
+                    Path sq = new Path(); sq.moveTo(14, 40); sq.lineTo(32, 40); sq.lineTo(52, 22); sq.lineTo(52, 78); sq.lineTo(32, 60); sq.lineTo(14, 60); sq.close(); c.drawPath(sq, f);
+                    c.drawLine(64, 36, 90, 64, s);
+                    c.drawLine(90, 36, 64, 64, s);
+                    break;
+                case "gear":
+                    for (int i = 0; i < 8; i++) { c.save(); c.rotate(i * 45f, 50, 50); c.drawRoundRect(43, 10, 57, 26, 5, 5, f); c.restore(); }
+                    s.setStrokeWidth(13f);
+                    c.drawCircle(50, 50, 22, s);
+                    c.drawCircle(50, 50, 7, f);
+                    break;
+                case "batt": float lv = level < 0 ? 50 : level; s.setStrokeWidth(7); c.drawRoundRect(4, 26, 82, 74, 12, 12, s); c.drawRoundRect(86, 40, 96, 60, 4, 4, f); float fw = Math.max(6, 66 * lv / 100f); c.drawRoundRect(11, 33, 11 + fw, 67, 6, 6, f); break;
+                case "battc": s.setStrokeWidth(7); c.drawRoundRect(4, 26, 82, 74, 12, 12, s); c.drawRoundRect(86, 40, 96, 60, 4, 4, f); Path bo = new Path(); bo.moveTo(50, 30); bo.lineTo(34, 52); bo.lineTo(44, 52); bo.lineTo(38, 70); bo.lineTo(58, 46); bo.lineTo(47, 46); bo.close(); c.drawPath(bo, f); break;
+                case "sig": for (int i = 0; i < 4; i++) { float bh = 25 + i * 20; boolean on = bars < 0 || i < bars; c.drawRoundRect(10 + i * 24, 92 - bh, 26 + i * 24, 92, 5, 5, on ? f : s); } break;
+                case "home":
+                    Path hh = new Path(); hh.moveTo(50, 12); hh.lineTo(90, 48); hh.lineTo(78, 48); hh.lineTo(78, 88); hh.lineTo(58, 88); hh.lineTo(58, 62); hh.lineTo(42, 62); hh.lineTo(42, 88); hh.lineTo(22, 88); hh.lineTo(22, 48); hh.lineTo(10, 48); hh.close(); c.drawPath(hh, f);
+                    break;
+                case "people":
+                    c.drawCircle(38, 30, 13, f);
+                    c.drawRoundRect(18, 48, 58, 86, 16, 16, f);
+                    c.drawCircle(68, 36, 10, f);
+                    c.drawRoundRect(52, 52, 86, 86, 13, 13, f);
+                    break;
             }
             c.restore();
         }
@@ -128,6 +253,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     SpeechRecognizer sr, cSr, compSr;
     boolean torchOn, battWarned, listening, pendingConfirm, charging, permAsked, composeActive;
     int lastPct = -1, sigBars = 3; String sigLabel = "";
+    int contactShown = 30;
     String lastSmsStatus = "";
     TextView smsStatusView;
     LinearLayout battOverlay, remOverlay, confirmOverlay;
@@ -373,7 +499,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         b.setBackground(gd(bg));
         THolder th = new THolder(); th.bg = bg; b.setTag(th);
         b.setElevation(dp(5));
-        b.setMinHeight(dp(100));
         b.setCompoundDrawables(null, ic(kind, fg, dp(40)), null, null);
         b.setCompoundDrawablePadding(dp(4));
         b.setPadding(dp(4), dp(8), dp(4), dp(10));
@@ -498,7 +623,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     Network n = cm.getActiveNetwork();
                     if (n != null) { net = true; NetworkCapabilities nc = cm.getNetworkCapabilities(n); wifi = nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI); }
                 } catch (Exception e) {}
-                sbNet.setText(wifi ? "WI-FI" : net ? "ИНТЕРНЕТ" : "БЕЗ СЕТИ");
+                sbNet.setText(wifi ? "" : (net ? "ИНТЕРНЕТ" : "БЕЗ СЕТИ"));
                 Icon wi = new Icon(wifi ? "wifi" : "web", Color.parseColor(SBFG)); wi.setBounds(0, 0, dp(32), dp(32));
                 sbNet.setCompoundDrawables(wi, null, null, null);
                 sbNet.setCompoundDrawablePadding(dp(6));
@@ -529,8 +654,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void showMain() {
         applyTheme(P.getInt("theme", 0));
         frame.setBackgroundColor(Color.parseColor(BG));
-        LinearLayout outer = col();
-        outer.setPadding(0, 0, 0, 0);
+
+        LinearLayout top = col();
+        top.setPadding(0, 0, 0, 0);
 
         LinearLayout sbar = row();
         sbar.setBackgroundColor(Color.parseColor(SBBG));
@@ -541,31 +667,35 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         sbOper.setGravity(Gravity.CENTER);
         sbNet = tv("", 16, SBFG, true);
         sbNet.setGravity(Gravity.END);
-        TextView gear = tv("", 20, SBFG, true);
-        gear.setCompoundDrawables(ic("gear", SBFG, dp(34)), null, null, null);
         sbOper.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         sbNet.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        gear.setOnLongClickListener(v -> { showSettings(); return true; });
-        gear.setOnClickListener(v -> say("Шестерёнка — настройки для родных. Нажмите и держите палец."));
-        sbar.addView(sbBatt); sbar.addView(sbSig); sbar.addView(sbOper); sbar.addView(sbNet); sbar.addView(gear);
-        outer.addView(sbar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        sbar.addView(sbBatt); sbar.addView(sbSig); sbar.addView(sbOper); sbar.addView(sbNet);
+        top.addView(sbar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         sbPopup = tv("", 15, "#C0392B", true);
         sbPopup.setVisibility(View.GONE);
         sbPopup.setPadding(dp(12), dp(4), dp(12), dp(4));
-        outer.addView(sbPopup);
-        pollSignal();
+        top.addView(sbPopup);
 
-        LinearLayout c = col();
+        LinearLayout gearRow = row();
+        View spacer = new View(this);
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(0, 0, 1f));
+        TextView gear = tv("", 20, MUT, true);
+        gear.setCompoundDrawables(ic("gear", MUT, dp(38)), null, null, null);
+        gear.setOnLongClickListener(v -> { showSettings(); return true; });
+        gear.setOnClickListener(v -> say("Шестерёнка — настройки для родных. Нажмите и держите палец."));
+        gearRow.addView(spacer); gearRow.addView(gear);
+        top.addView(gearRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         timeView = tv(curTime(), 44, DARK, true);
         timeView.setGravity(Gravity.CENTER);
         timeView.setOnClickListener(v -> openSystemCalendar());
-        c.addView(timeView);
+        top.addView(timeView);
         dateView = tv(curDate(), 15, MUT, true);
         dateView.setGravity(Gravity.CENTER);
         dateView.setOnClickListener(v -> openSystemCalendar());
-        c.addView(dateView);
+        top.addView(dateView);
         String nr = nextReminderText();
-        if (nr != null) c.addView(tv("Ближайшее: " + nr, 14, ACC, true));
+        if (nr != null) top.addView(tv("Ближайшее: " + nr, 14, ACC, true));
         if (clockRun == null) clockRun = new Runnable() { public void run() { if (timeView != null) { timeView.setText(curTime()); dateView.setText(curDate()); } H.postDelayed(this, 20000); } };
         H.postDelayed(clockRun, 20000);
 
@@ -578,7 +708,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(dp(170), dp(170));
         mp.topMargin = dp(6); mp.bottomMargin = dp(4);
         micBtn.setLayoutParams(mp);
-        c.addView(micBtn);
+        top.addView(micBtn);
 
         LinearLayout capBox = new LinearLayout(this);
         capBox.setOrientation(LinearLayout.VERTICAL);
@@ -594,14 +724,19 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         cp.topMargin = dp(4); cp.bottomMargin = dp(4);
         capBox.setLayoutParams(cp);
-        c.addView(capBox);
+        top.addView(capBox);
 
-        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        LinearLayout c = col();
+        int tileH = Math.round(dp(112) * FS);
+        int smallH = Math.round(dp(64) * FS);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         hp.setMargins(dp(3), dp(2), dp(3), dp(2));
+
         callTile = tileBtn("phone", "ПОЗВОНИТЬ", tileColor(0), TFG, v -> showContacts(true));
         msgTile = tileBtn("mail", "СООБЩЕНИЯ", tileColor(1), TFG, v -> { blink(msgTile, false); showSmsList(); });
         Button t3 = tileBtn("dial", "НАБОР", tileColor(2), TFG, v -> showDial());
         LinearLayout r1 = row();
+        r1.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tileH));
         callTile.setLayoutParams(hp); msgTile.setLayoutParams(hp); t3.setLayoutParams(hp);
         r1.addView(callTile); r1.addView(msgTile); r1.addView(t3);
         c.addView(r1);
@@ -609,40 +744,46 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         Button sos = bigI("sos", "SOS — ВЫЗВАТЬ ПОМОЩЬ (112)", "#C0392B", "#FFFFFF", v -> startSos());
         sos.setTextSize(20 * FS * SC);
         sos.setMinHeight(dp(80));
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sp.topMargin = dp(4); sp.bottomMargin = dp(4);
-        sos.setLayoutParams(sp);
+        LinearLayout.LayoutParams sp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sp2.topMargin = dp(4); sp2.bottomMargin = dp(4);
+        sos.setLayoutParams(sp2);
         c.addView(sos);
 
         Button t6 = tileBtn("memo", "НАПОМИНАНИЯ", tileColor(0), TFG, v -> showReminders());
         Button t7 = tileBtn("alarm", "БУДИЛЬНИК", tileColor(1), TFG, v -> showAlarms());
         Button t8 = tileBtn("torch", "ФОНАРЬ", tileColor(2), TFG, v -> toggleTorch());
         LinearLayout r2 = row();
+        r2.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tileH));
         t6.setLayoutParams(hp); t7.setLayoutParams(hp); t8.setLayoutParams(hp);
         r2.addView(t6); r2.addView(t7); r2.addView(t8);
         c.addView(r2);
 
-        LinearLayout.LayoutParams hpSmall = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        LinearLayout.LayoutParams hpSmall = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         hpSmall.setMargins(dp(3), dp(2), dp(3), dp(2));
         LinearLayout r3 = row();
+        r3.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, smallH));
         Button ex = tileBtn("wrench", "ПРОЧЕЕ", tileColor(0), TFG, v -> showExtra());
-        ex.setMinHeight(dp(56));
-        ex.setTextSize(12 * FS * SC);
         ex.setCompoundDrawables(null, ic("wrench", TFG, dp(24)), null, null);
+        ex.setTextSize(12 * FS * SC);
         ex.setLayoutParams(hpSmall);
         r3.addView(ex);
         if (P.getBoolean("showApps", true)) {
             Button ap = tileBtn("folder", "ДОП. ПРОГРАММЫ", tileColor(1), TFG, v -> showAppsScreen());
-            ap.setMinHeight(dp(56));
-            ap.setTextSize(12 * FS * SC);
             ap.setCompoundDrawables(null, ic("folder", TFG, dp(24)), null, null);
+            ap.setTextSize(12 * FS * SC);
             ap.setLayoutParams(hpSmall);
             r3.addView(ap);
         }
         c.addView(r3);
 
-        outer.addView(c);
-        setScreen(outer, true);
+        if (P.getBoolean("showApps", true)) {
+            Button fb = bigI("folder", "ДОПОЛНИТЕЛЬНЫЕ ПРОГРАММЫ", TILE, TFG, v -> showAppsScreen());
+            fb.setTextSize(16 * FS * SC);
+            c.addView(fb);
+        }
+
+        setScreenHeader(c, true, top);
+        pollSignal();
     }
 
     void setMicLabel(String s) {
@@ -656,20 +797,20 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void showAppsScreen() {
         LinearLayout c = col();
         c.addView(tv("ДОПОЛНИТЕЛЬНЫЕ ПРОГРАММЫ", 24, DARK, true));
-        LinearLayout.LayoutParams hp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        int rowH = Math.round(dp(110) * FS);
+        LinearLayout.LayoutParams hp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         hp2.setMargins(dp(3), dp(3), dp(3), dp(3));
         List<Object[]> apps = installedApps();
         LinearLayout ar = null;
         int n = 0;
         for (final Object[] a : apps) {
-            if (n % 3 == 0) { ar = row(); c.addView(ar); }
+            if (n % 3 == 0) { ar = row(); ar.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH)); c.addView(ar); }
             Button ab = new Button(this);
             ab.setText((String) a[0]);
             ab.setTextSize(11 * FS * SC); ab.setTextColor(Color.parseColor(TFG));
             ab.setBackground(gd(TILE));
             THolder th = new THolder(); th.bg = TILE; ab.setTag(th);
             ab.setElevation(dp(4));
-            ab.setMinHeight(dp(100));
             Drawable icn = (Drawable) a[1];
             if (icn != null) { icn.setBounds(0, 0, dp(40), dp(40)); ab.setCompoundDrawables(null, icn, null, null); }
             ab.setOnClickListener(v -> { pressFx(v); openPackage((String) a[2]); });
@@ -959,7 +1100,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     void showAbout() {
         LinearLayout c = col();
         c.addView(tv("ВНУЧОК", 34, ACC, true));
-        c.addView(tv("Версия: 1.0", 20, DARK, true));
+        c.addView(tv("Версия: 1.1", 20, DARK, true));
         c.addView(tv("Оболочка Android для пенсионеров", 16, MUT, true));
         c.addView(tv("Все данные хранятся только на телефоне", 14, MUT, true));
         setScreen(c, false);
@@ -1032,7 +1173,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         try {
             Cursor cur = getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                     new String[]{ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER},
-                    null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIMIT 80");
+                    null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIMIT 1000");
             if (cur != null) {
                 while (cur.moveToNext()) {
                     String n = cur.getString(0);
@@ -1082,11 +1223,17 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     void showContacts(boolean callMode) {
+        contactShown = 30;
+        renderContacts(callMode);
+    }
+
+    void renderContacts(boolean callMode) {
         LinearLayout c = col();
         c.addView(tv(callMode ? "КОМУ ЗВОНИМ?" : "КОМУ ПИШЕМ?", 26, DARK, true));
         List<String[]> cs = allContacts();
         int customN = contacts().size();
-        for (int i = 0; i < cs.size(); i++) {
+        int upTo = Math.min(contactShown, cs.size());
+        for (int i = 0; i < upTo; i++) {
             final String nm = cs.get(i)[0], num = cs.get(i)[1];
             final boolean isCustom = i < customN;
             final int idx = i;
@@ -1102,11 +1249,14 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 if (isCustom) { List<String[]> x = contacts(); x.remove(idx); saveContacts(x); }
                 else { P.edit().putString("hidden", P.getString("hidden", "") + (P.getString("hidden", "").isEmpty() ? "" : "\n") + nm + "|" + num).apply(); }
                 say("Удалил: " + nm);
-                showContacts(callMode);
+                renderContacts(callMode);
             }));
             db.setLayoutParams(new LinearLayout.LayoutParams(dp(70), ViewGroup.LayoutParams.WRAP_CONTENT));
             rw.addView(db);
             c.addView(rw);
+        }
+        if (upTo < cs.size()) {
+            c.addView(bigI("dial", "ПОКАЗАТЬ ЕЩЁ (" + (cs.size() - upTo) + ")", TILE, TFG, v -> { contactShown += 30; renderContacts(callMode); }));
         }
         Button header = bigI("people", "НОВЫЙ НОМЕР", "#3FAE4C", "#FFFFFF", v -> editContact(-1, "", ""));
         header.setTextSize(18 * FS * SC);
@@ -1758,6 +1908,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     void startSos() {
+        if (checkSelfPermission(android.Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CALL_PHONE}, 77);
+        }
         LinearLayout c = col();
         c.addView(tv("ВЫЗЫВАЕМ ПОМОЩЬ!", 28, "#C0392B", true));
         TextView num = tv("5", 90, "#C0392B", true);
@@ -1794,7 +1947,14 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         String sms = "SOS! Нужна помощь срочно! " + loc;
         List<String[]> cs = contacts();
         for (int i = 0; i < 3 && i < cs.size(); i++) sendSms(cs.get(i)[1], sms);
-        callNumber("112", "служба спасения");
+        boolean called = false;
+        if (checkSelfPermission(android.Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            try { startActivity(new Intent(Intent.ACTION_CALL, Uri.parse("tel:112"))); called = true; } catch (Exception e) {}
+        }
+        if (!called) {
+            try { startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:112"))); } catch (Exception e) {}
+            say("Телефон не получил разрешение на прямой звонок. Нажмите зелёную кнопку вызова на экране набора.");
+        }
         LinearLayout c = col();
         c.addView(tv("☎ ИДЁТ ЗВОНОК В 112…", 26, "#C0392B", true));
         c.addView(tv("СМС отправлено родным:", 18, DARK, true));
@@ -1929,4 +2089,4 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         if (tts != null) tts.shutdown();
         super.onDestroy();
     }
-            }
+                }

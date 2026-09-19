@@ -1256,8 +1256,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         for (int i = 0; i < order.size(); i++) {
             final int pos = i;
             final String id = order.get(i);
-            String name = id;
-            for (String[] m : meta) if (m[0].equals(id)) name = m[1];
+            String tmpName = id;
+            for (String[] m : meta) if (m[0].equals(id)) tmpName = m[1];
+            final String name = tmpName;
             LinearLayout rw = row();
             rw.setGravity(Gravity.CENTER_VERTICAL);
             Button nb = big(name, tileOff(id) ? "#8A8A8A" : TILE, TFG, v -> {
